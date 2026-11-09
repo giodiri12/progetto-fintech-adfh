@@ -8,6 +8,8 @@ The demo case uses the obligations published by Northrop Grumman Corp (10-K for 
 
 *Educational project. Not investment advice.*
 
+**Live dashboard:** https://progetto-fintech-adfh.vercel.app (mirror on GitHub Pages: https://giodiri12.github.io/progetto-fintech-adfh/). The Treasury curve is updated automatically every day (see [How to update the data](#how-to-update-the-data)).
+
 ---
 
 ## What it shows
