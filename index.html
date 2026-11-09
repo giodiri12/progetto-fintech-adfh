@@ -38,6 +38,11 @@ th:first-child,td:first-child{text-align:left;white-space:normal;min-width:8em}t
 button{font:inherit;padding:4px 10px;border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:5px;cursor:pointer}
 details summary{cursor:pointer;color:var(--blue);margin:6px 0}
 .small{font-size:.85rem;color:var(--muted)}
+.upd-banner{border-radius:6px;padding:10px 12px;margin:6px 0 10px;border:1px solid var(--line)}.upd-banner .upd-head{font-weight:600;margin-bottom:2px}
+.upd-ok{background:#eaf6ee;border-color:#9fd0ae}.upd-pending{background:#fff4e0;border-color:#e8b76a}.upd-bad{background:#ffe9e9;border-color:#d99}
+.upd-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:6px 0}.upd-bar button{font-weight:600;padding:6px 14px}button:disabled{opacity:.6;cursor:wait}
+.st{font-weight:600}.st-ok{color:#1d7a3a}.st-pending{color:#9a6200}.st-bad{color:#b33}.st-muted{color:var(--muted)}
+.upd-table td{white-space:normal}.upd-table td:nth-child(2){white-space:nowrap}
 footer{text-align:center;color:var(--muted);padding:18px 0 28px}
 #about p,#about li{max-width:880px}
 @media(max-width:820px){.grid4{grid-template-columns:repeat(2,1fr)}h1{font-size:1.35rem}.chartbox{height:280px}}
@@ -234,32 +239,221 @@ function buildControls() {
   const sh = $("shocks"); d.curve.tenors.forEach(function (t, k) { const w = el("div"); w.appendChild(el("label", t + " (bp)")); const i = el("input"); i.type = "number"; i.step = "1"; i.value = st.shocks[k]; i.setAttribute("aria-label", "Custom shock in basis points for " + t); i.addEventListener("input", function () { st.shocks[k] = i.value === "" ? NaN : Number(i.value); update(); }); w.appendChild(i); sh.appendChild(w); });
 }
 
-/* "Data updates" section: when the curve was last refreshed and what each automatic update changed (data.meta.update_log, newest first). */
+/* ---------------- "Data updates" section ----------------
+   Shows, for each of the last 10 Treasury business days, whether its curve was received and when, any later
+   corrections, the latest automatic checks (read live from the public GitHub API) and the "Check for new data now" button. */
+const AUTO = {
+  repo: "giodiri12/progetto-fintech-adfh",
+  workflow: "update-curve.yml",
+  checkNowUrl: (location.hostname === "progetto-fintech-adfh.vercel.app" ? "" : "https://progetto-fintech-adfh.vercel.app") + "/api/check-now"
+};
+const GH_API = "https://api.github.com/repos/" + AUTO.repo;
+const RUNS_PAGE = "https://github.com/" + AUTO.repo + "/actions/workflows/" + AUTO.workflow;
+const UPD = { summary: null, data: null, activity: null };
+
 function localTime(iso) { const t = new Date(iso); return isNaN(t) ? "n/a" : t.toLocaleString("en-GB", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }); }
-function utcTime(iso) { return typeof iso === "string" ? iso.slice(0, 16).replace("T", " ") + " UTC" : "n/a"; }
+function localDay(t) { return new Date(t).toLocaleDateString("en-CA"); }
+/* "today, 07:12 GMT+8" / "yesterday, 07:12 GMT+8" / "Fri 6 Nov, 07:12 GMT+8" in the viewer's time zone. */
+function when(iso) {
+  const t = new Date(iso); if (isNaN(t)) return "n/a";
+  const d = localDay(t), today = localDay(Date.now()), yest = localDay(Date.now() - 86400000);
+  const hm = t.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
+  return (d === today ? "today" : d === yest ? "yesterday" : t.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })) + ", " + hm;
+}
+function nyDate(t) { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(t); }
+function dayLabel(iso) { return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }); }
+/* About 6 PM New York time on a US date: when the Treasury normally has the curve online. */
+function nyEvening(iso) {
+  const tz = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", timeZoneName: "short" }).formatToParts(new Date(iso + "T17:00:00Z")).find(function (p) { return p.type === "timeZoneName"; }).value;
+  return new Date(iso + (tz === "EDT" ? "T22:00:00Z" : "T23:00:00Z"));
+}
+function lastBusinessDays(n) {
+  const out = []; const d = new Date(nyDate(new Date()) + "T12:00:00Z");
+  while (out.length < n) { const w = d.getUTCDay(); if (w !== 0 && w !== 6) out.push(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() - 1); }
+  return out;
+}
+function nextScheduled(times) {
+  const now = Date.now(); let best = null;
+  (times || []).forEach(function (hm) { const p = hm.split(":"); const t = new Date(); t.setUTCHours(Number(p[0]), Number(p[1]), 0, 0); if (t.getTime() <= now) t.setUTCDate(t.getUTCDate() + 1); if (!best || t < best) best = t; });
+  return best;
+}
+function stat(cls, text) { return el("span", text, "st st-" + cls); }
+
+/* Live activity from the public GitHub API (no login needed): recent runs of the update job and the commits that changed data.js. */
+function ghGet(path) { return fetch(GH_API + path, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("GitHub API HTTP " + r.status); return r.json(); }); }
+function loadActivity() {
+  return Promise.all([ghGet("/actions/workflows/" + AUTO.workflow + "/runs?per_page=12"), ghGet("/commits?path=data.js&per_page=40")]).then(function (x) {
+    const bot = x[1].filter(function (c) { return c.commit && c.commit.author && c.commit.author.name === "github-actions[bot]"; })
+      .map(function (c) { return { time: c.commit.committer.date, title: c.commit.message.split("\n")[0], url: c.html_url }; });
+    return { runs: x[0].workflow_runs || [], bot: bot };
+  });
+}
+function runKind(run) { return run.event === "schedule" ? "Scheduled" : (/website/.test(run.display_title || "") ? "Button on this site" : "Manual (GitHub)"); }
+function runResult(run, bot) {
+  if (run.status !== "completed") return { cls: "pending", text: run.status === "queued" ? "Queued" : "Running…" };
+  if (run.conclusion !== "success") return { cls: "bad", text: run.conclusion === "cancelled" ? "Cancelled: no data changed" : "Failed: no data changed (see details)" };
+  const a = Date.parse(run.run_started_at || run.created_at) - 60000, b = Date.parse(run.updated_at) + 180000;
+  const c = bot.find(function (x) { const t = Date.parse(x.time); return t >= a && t <= b; });
+  return c ? { cls: "ok", text: "New data saved: " + c.title.replace(/^Treasury curve update: /, "curve ").replace(/^Treasury curve /, ""), commit: c } : { cls: "ok", text: "Completed: no new data" };
+}
+
 function buildUpdates(summary, data) {
-  const u = $("updates"), m = data.meta, log = m.update_log || [], au = m.auto_update || {};
+  UPD.summary = summary; UPD.data = data;
+  const u = $("updates"); clear(u);
   u.appendChild(el("h2", "Data updates"));
-  const P = function (t, cls) { u.appendChild(el("p", t, cls)); };
-  const last = log[0];
-  const p = el("p"); p.appendChild(document.createTextNode("Latest curve date: ")); p.appendChild(el("b", summary.as_of));
-  p.appendChild(document.createTextNode(". Last automatic update: ")); p.appendChild(el("b", last ? localTime(last.time_utc) : "none yet"));
-  if (last) p.appendChild(document.createTextNode(" (" + utcTime(last.time_utc) + ")."));
-  u.appendChild(p);
-  P("The Treasury par yield curve is downloaded automatically every day, with no manual step, from the Treasury's official CSV and XML data feeds. " +
-    "A new day is saved only if both feeds agree on every value and all checks pass (10 tenors present, numeric, in percent, plausible range, business day, no duplicates, no extreme daily jump). " +
-    "The last 10 stored days are compared with the feeds at every run; corrections published by the Treasury are applied and listed below. " +
-    "If any check fails, nothing is changed: the page keeps the last valid curve and shows the stale data warning.", "small");
-  if (au.schedule_utc) P("The Treasury normally publishes the curve by about 6 PM New York time on business days. Scheduled checks: " + au.schedule_utc.join(", ") + " UTC" + (au.schedule_note ? " (" + au.schedule_note + ")" : "") + ". A check that finds no new data changes nothing and is not listed.", "small");
-  P("The company's obligations come from its annual 10-K filing and are updated manually once a year.", "small");
-  if (!log.length) { P("No automatic update has run yet."); return; }
-  u.appendChild(el("h3", "Recent updates (newest first)"));
-  const corr = function (c) { return c.date + " " + c.tenor + ": " + fmt(c.old, 2) + " → " + fmt(c.new, 2); };
-  const w = el("div", null, "tablewrap");
-  w.appendChild(table(["Update time (your time zone)", "Update time (UTC)", "Curve dates added", "Corrections applied", "Checks"], log.slice(0, 15).map(function (r) {
-    return [localTime(r.time_utc), utcTime(r.time_utc), r.curve_dates_added.length ? r.curve_dates_added.join(", ") : "none", r.corrections.length ? r.corrections.map(corr).join("; ") : "none", r.checks];
-  })));
-  u.appendChild(w);
+  u.appendChild(el("div", null, "upd-banner")).id = "upd-banner";
+  const bar = el("div", null, "upd-bar");
+  const btn = el("button", "Check for new data now"); btn.type = "button"; btn.id = "checkBtn"; btn.addEventListener("click", checkNow);
+  bar.appendChild(btn); const msg = el("span", "", "small"); msg.id = "checkMsg"; msg.setAttribute("aria-live", "polite"); bar.appendChild(msg);
+  u.appendChild(bar);
+  u.appendChild(el("p", "Use the button only if today's curve is missing: it runs the same automatic check immediately (same sources, same validation). The result appears below in about 1 to 2 minutes.", "small"));
+  u.appendChild(el("h3", "Last 10 Treasury business days"));
+  const days = el("div", null, "tablewrap"); days.id = "upd-days"; u.appendChild(days);
+  u.appendChild(el("h3", "Recent checks"));
+  const runs = el("div", null, "tablewrap"); runs.id = "upd-runs"; runs.appendChild(el("p", "Loading the latest checks from GitHub…", "small")); u.appendChild(runs);
+  const au = data.meta.auto_update || {};
+  const how = el("details"); how.appendChild(el("summary", "How the automatic update works"));
+  ["The Treasury par yield curve is downloaded automatically every day, with no manual step, from the Treasury's official CSV and XML data feeds.",
+   "A new day is saved only if both feeds agree on every value and all checks pass: 10 tenors present, numeric, in percent, plausible range, business day, no duplicates, no extreme daily jump.",
+   "At every check the last 10 stored days are compared again with the feeds; corrections published by the Treasury are applied and shown in the table above.",
+   "If any check fails, nothing is changed: the page keeps the last valid curve and shows the stale data warning.",
+   "The Treasury normally publishes the curve by about 6 PM New York time on business days. Scheduled checks: " + (au.schedule_utc || ["23:10", "00:40", "04:10"]).join(", ") + " UTC" + (au.schedule_note ? " (" + au.schedule_note + ")" : "") + ".",
+   "The company's obligations come from its annual 10-K filing and are updated manually once a year."].forEach(function (t) { how.appendChild(el("p", t, "small")); });
+  const lk = el("p", null, "small"); const a = el("a", "Full history of checks on GitHub"); a.href = RUNS_PAGE; a.target = "_blank"; a.rel = "noopener"; lk.appendChild(a); how.appendChild(lk);
+  u.appendChild(how);
+  renderUpdateStatus();
+  refreshActivity();
+}
+function refreshActivity() {
+  return loadActivity().then(function (act) { UPD.activity = act; renderUpdateStatus(); renderRuns(); return act; })
+    .catch(function (e) { const r = $("upd-runs"); clear(r); r.appendChild(el("p", "The list of recent checks could not be loaded from GitHub (" + e.message + "). The table above still shows what this page's data contains.", "small")); });
+}
+
+function renderUpdateStatus() {
+  const s = UPD.summary, d = UPD.data, log = d.meta.update_log || [], stored = new Set(d.curve.dates), act = UPD.activity;
+  const lastStored = d.curve.dates[d.curve.dates.length - 1];
+  const runs = act ? act.runs : [], lastRun = runs.find(function (r) { return r.status === "completed"; });
+  const nextRun = nextScheduled((d.meta.auto_update || {}).schedule_utc || ["23:10", "00:40", "04:10"]);
+  const received = {}, corrected = {};
+  log.slice().reverse().forEach(function (e) {
+    (e.curve_dates_added || []).forEach(function (x) { received[x] = e.time_utc; });
+    (e.corrections || []).forEach(function (c) { (corrected[c.date] = corrected[c.date] || []).push({ time: e.time_utc, c: c }); });
+  });
+  const firstAuto = log.length ? log[log.length - 1].time_utc : null;
+  // one row per business day
+  let pendingDay = null;
+  const rows = lastBusinessDays(10).map(function (day) {
+    let st, at = "", note = "";
+    if (stored.has(day)) {
+      st = stat("ok", "✓ Curve received");
+      at = received[day] ? when(received[day]) : "before automatic updates started";
+      if (corrected[day]) note = corrected[day].map(function (x) { return "Corrected by the Treasury, applied " + when(x.time) + ": " + x.c.tenor + " " + fmt(x.c.old, 2) + " → " + fmt(x.c.new, 2); }).join("; ");
+    } else if (day < lastStored) {
+      st = stat("muted", "No curve published"); note = "US bond market holiday: the Treasury publishes no curve for this day.";
+    } else if (Date.now() < nyEvening(day).getTime()) {
+      st = stat("muted", "Not published yet"); note = "Expected after about 6 PM New York time (" + when(nyEvening(day).toISOString()) + ").";
+    } else if (Date.now() < nyEvening(day).getTime() + 2.5 * 3600000) {
+      st = stat("muted", "Due at the next check"); note = "The Treasury normally publishes around now; " + (nextRun ? "next scheduled check " + when(nextRun.toISOString()) + "." : "the next scheduled check will save it.");
+    } else {
+      st = stat("pending", "⚠ Not received yet"); pendingDay = pendingDay || day;
+      note = (lastRun ? "Last check " + when(lastRun.updated_at) + ". " : "") + (nextRun ? "Next scheduled check " + when(nextRun.toISOString()) + ". " : "") + "On US market holidays no curve is published.";
+    }
+    return [dayLabel(day), st, at, note];
+  });
+  const t = el("table"), th = el("thead"), tr = el("tr");
+  ["Business day (New York)", "Status", "Saved on this site", "Notes"].forEach(function (h) { tr.appendChild(el("th", h)); }); th.appendChild(tr); t.appendChild(th);
+  const tb = el("tbody"); rows.forEach(function (r) { const row = el("tr"); r.forEach(function (c) { const td = el("td"); if (typeof c === "string") td.textContent = c; else td.appendChild(c); row.appendChild(td); }); tb.appendChild(row); }); t.appendChild(tb);
+  t.className = "upd-table";
+  const dz = $("upd-days"); clear(dz); dz.appendChild(t);
+  // banner
+  const b = $("upd-banner"); clear(b); b.className = "upd-banner";
+  const failed = lastRun && lastRun.conclusion !== "success" && lastRun.conclusion !== "cancelled";
+  const newer = act && act.bot.length && (!log.length || Date.parse(act.bot[0].time) > Date.parse(log[0].time_utc) + 120000) && act.bot[0];
+  let cls, head;
+  if (failed) { cls = "bad"; head = "✗ The last check (" + when(lastRun.updated_at) + ") failed. No data was changed: the page shows the last valid curve (" + dayLabel(lastStored) + ")."; }
+  else if (pendingDay) { cls = "pending"; head = "⚠ Waiting for the curve of " + dayLabel(pendingDay) + ". The latest curve on this site is " + dayLabel(lastStored) + "."; }
+  else { cls = "ok"; head = "✓ Up to date. Latest Treasury curve: " + dayLabel(lastStored) + (received[lastStored] ? ", saved " + when(received[lastStored]) : "") + "."; }
+  b.classList.add("upd-" + cls); b.appendChild(el("div", head, "upd-head"));
+  const parts = [];
+  if (lastRun) parts.push("Last check: " + when(lastRun.updated_at) + " (" + runResult(lastRun, act.bot).text.toLowerCase() + ").");
+  else if (!act) parts.push("Loading the latest checks…");
+  if (nextRun) parts.push("Next scheduled check: " + when(nextRun.toISOString()) + ".");
+  if (firstAuto) parts.push("Automatic updates since " + localTime(firstAuto) + ".");
+  b.appendChild(el("div", parts.join(" "), "small"));
+  if (failed) { const a = el("a", "See what went wrong on GitHub"); a.href = lastRun.html_url; a.target = "_blank"; a.rel = "noopener"; b.appendChild(a); }
+  if (newer) { const p = el("div", "A newer data file was saved " + when(newer.time) + " (" + newer.title + "). ", "small"); const a = el("a", "Reload the page"); a.href = "#"; a.addEventListener("click", function (e) { e.preventDefault(); location.reload(); }); p.appendChild(a); b.appendChild(p); }
+}
+
+function renderRuns() {
+  const act = UPD.activity, r = $("upd-runs"); clear(r);
+  if (!act.runs.length) { r.appendChild(el("p", "No check has run yet.", "small")); return; }
+  const t = el("table"), th = el("thead"), tr = el("tr");
+  ["Check time (your time zone)", "Type", "Result", ""].forEach(function (h) { tr.appendChild(el("th", h)); }); th.appendChild(tr); t.appendChild(th);
+  const tb = el("tbody");
+  act.runs.slice(0, 10).forEach(function (run) {
+    const res = runResult(run, act.bot), row = el("tr");
+    row.appendChild(el("td", when(run.run_started_at || run.created_at)));
+    row.appendChild(el("td", runKind(run)));
+    const td = el("td"); td.appendChild(stat(res.cls, res.text)); row.appendChild(td);
+    const tl = el("td"); const a = el("a", "details"); a.href = run.html_url; a.target = "_blank"; a.rel = "noopener"; tl.appendChild(a); row.appendChild(tl);
+    tb.appendChild(row);
+  });
+  t.appendChild(tb); t.className = "upd-table"; r.appendChild(t);
+}
+
+/* ---------------- "Check for new data now" ---------------- */
+function setCheckMsg(text, cls) { const m = $("checkMsg"); clear(m); m.className = "small" + (cls ? " st st-" + cls : ""); m.textContent = text; }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function checkNow() {
+  const btn = $("checkBtn"); btn.disabled = true; btn.textContent = "Checking…";
+  setCheckMsg("Asking GitHub to run the check…");
+  const done = function () { btn.disabled = false; btn.textContent = "Check for new data now"; };
+  fetch(AUTO.checkNowUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+    .then(function (r) { return r.json().catch(function () { return { ok: false, code: "http", message: "Unexpected answer (HTTP " + r.status + ")." }; }); })
+    .then(function (j) {
+      if (j.code === "started") return followRun(Date.parse(j.requested_at) - 60000, null);
+      if (j.code === "already_running") { setCheckMsg("A check is already running; following it…", "pending"); return followRun(0, j.run_id); }
+      if (j.code === "cooldown") {
+        const last = UPD.activity && UPD.activity.runs.find(function (x) { return x.id === j.run_id; });
+        setCheckMsg(j.message + (last && last.status === "completed" ? " Result: " + runResult(last, UPD.activity.bot).text.toLowerCase() + "." : "") + " You can try again in " + Math.ceil(j.retry_after_s / 60) + " minute(s).", "muted");
+        return refreshActivity();
+      }
+      if (j.code === "not_configured") { setCheckMsg("The button is not active yet (the site owner must add the GitHub token on Vercel). The scheduled checks still run every day.", "pending"); return; }
+      setCheckMsg("The check could not be started: " + (j.message || "unknown error") + " Scheduled checks still run every day.", "bad");
+    })
+    .catch(function (e) { setCheckMsg("The check could not be started (" + e.message + "). Scheduled checks still run every day.", "bad"); })
+    .then(done, done);
+}
+/* Follows the requested run until it finishes (max about 6 minutes), then reports the result and reloads if new data was saved. */
+function followRun(sinceMs, runId) {
+  const start = Date.now();
+  const tick = function () {
+    if (Date.now() - start > 6 * 60000) { setCheckMsg("The check is taking longer than usual. Its result will appear in the table below; reload the page later.", "pending"); return; }
+    return refreshActivity().then(function (act) {
+      const run = act && act.runs.find(function (x) { return runId ? x.id === runId : (x.event === "workflow_dispatch" && Date.parse(x.created_at) >= sinceMs); });
+      if (!run) { setCheckMsg("Check requested. Waiting for GitHub to start it…", "pending"); return sleep(8000).then(tick); }
+      runId = run.id;
+      if (run.status !== "completed") { setCheckMsg("Check running on GitHub (" + run.status.replace("_", " ") + ")…", "pending"); return sleep(8000).then(tick); }
+      const res = runResult(run, act.bot);
+      if (res.cls === "bad") { setCheckMsg("The check failed: no data was changed. The page keeps the last valid curve.", "bad"); return; }
+      if (!res.commit) { setCheckMsg("Check complete: no new data. The Treasury has not published a curve newer than " + dayLabel(UPD.data.curve.dates[UPD.data.curve.dates.length - 1]) + ".", "ok"); return; }
+      setCheckMsg("New data saved (" + res.commit.title + "). The site is being republished; this page reloads automatically when it is ready…", "ok");
+      return waitForNewData(res.commit.time);
+    });
+  };
+  return tick();
+}
+function waitForNewData(commitTime) {
+  const start = Date.now();
+  const poll = function () {
+    return fetch("data.js?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.text(); }).then(function (txt) {
+      const m = /"update_log":\[\{"time_utc":"([^"]+)"/.exec(txt);
+      if (m && Date.parse(m[1]) >= Date.parse(commitTime) - 600000 && (!UPD.data.meta.update_log || !UPD.data.meta.update_log.length || m[1] !== UPD.data.meta.update_log[0].time_utc)) { location.reload(); return; }
+      if (Date.now() - start > 4 * 60000) { setCheckMsg("New data was saved; the site is still being republished. Reload the page in a minute.", "ok"); return; }
+      return sleep(10000).then(poll);
+    }).catch(function () { return sleep(10000).then(poll); });
+  };
+  return poll();
 }
 
 function buildAbout(summary, data, valid) {

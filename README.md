@@ -57,11 +57,12 @@ progetto-fintech-adfh/
 ├── engine.js                           calculation engine, shared by the page and the update script
 ├── data.js                             all saved data: curve, obligations, scenarios, summary texts, update log
 ├── scripts/update-curve.mjs            daily download, verification and update of the Treasury curve
+├── api/check-now.js                    Vercel function behind the "Check for new data now" button
 ├── .github/workflows/update-curve.yml  schedule that runs the update script every day (GitHub Actions)
 └── README.md                           this file
 ```
 
-No build step, server, database or API keys are needed. `index.html`, `engine.js` and `data.js` must be in the same folder.
+No build step, server or database is needed. `index.html`, `engine.js` and `data.js` must be in the same folder. The only secret is the optional GitHub token for the "Check for new data now" button (see below).
 
 ---
 
@@ -137,10 +138,24 @@ Nobody needs to download or type anything. A scheduled GitHub Actions job (`.git
 **Schedule.** The Treasury normally publishes the curve by about 6 PM New York time on business days, which is 22:00–23:00 UTC. The job runs at 23:10, 00:40 and 04:10 UTC (07:10, 08:40 and 12:10 in Singapore). The later runs catch late publications. GitHub may start a scheduled run a few minutes late.
 
 **Where to see what happened**
-- On the page: the *Data updates* section shows the time of the last update and the recent updates (dates added, corrections, checks).
+- On the page, the *Data updates* section shows:
+  - a status line (up to date / waiting / last check failed);
+  - the last 10 Treasury business days, each with the time its curve was saved on the site and any later Treasury corrections;
+  - the recent checks (scheduled, manual or from the button), read live from the public GitHub API.
 - On GitHub: the *Actions* tab shows every run with its log, and each update is a commit by `github-actions[bot]`.
 
-**Run it by hand** (optional): *Actions → Update Treasury curve → Run workflow*, or locally:
+**"Check for new data now" button.** If a curve is missing, anyone can press the button on the page. It calls `api/check-now.js`, a free Vercel serverless function, which starts the same GitHub Actions job immediately. The job uses the same sources and the same checks; nothing is computed or downloaded in the browser.
+- The page follows the run and reports the result: new data saved, no new data, or failed. When new data was saved, the page reloads automatically once the site is republished.
+- Protection against abuse: at most one check every 5 minutes, and never while a check is running. Requests from other websites are refused.
+- Setup, done once by the owner:
+  1. On GitHub, create a fine-grained personal access token (*Settings → Developer settings → Personal access tokens → Fine-grained tokens*):
+     - *Repository access*: only `progetto-fintech-adfh`;
+     - *Permissions*: *Actions: Read and write*, nothing else.
+  2. On Vercel, add it as the environment variable `GITHUB_DISPATCH_TOKEN` for *Production* (*Project → Settings → Environment Variables*), then redeploy.
+  3. Renew the token before it expires. Without a valid token the button says it is not active; the scheduled checks keep running.
+- On the GitHub Pages mirror the button calls the same function on the Vercel site.
+
+**Run it by hand** (optional): the button on the page, *Actions → Update Treasury curve → Run workflow* on GitHub, or locally:
 
 ```
 node scripts/update-curve.mjs --dry-run   # download and check, write nothing

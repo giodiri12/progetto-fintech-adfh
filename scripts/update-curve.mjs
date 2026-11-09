@@ -265,7 +265,7 @@ async function main() {
     check(treas, "Treasury source entry not found in meta.sources");
     treas.access_date = TODAY;
     const checks = `CSV and XML feeds agree on all ${compared} values checked; last ${RECHECK_DAYS} stored days re-verified` + (notes.length ? "; " + notes.join("; ") : "");
-    d.meta.update_log = [{ time_utc: NOW, trigger: process.env.GITHUB_EVENT_NAME || "local", curve_dates_added: added, corrections: corrections, checks: checks }].concat(d.meta.update_log || []).slice(0, LOG_KEEP);
+    d.meta.update_log = [{ time_utc: NOW, trigger: process.env.UPDATE_TRIGGER || process.env.GITHUB_EVENT_NAME || "local", curve_dates_added: added, corrections: corrections, checks: checks }].concat(d.meta.update_log || []).slice(0, LOG_KEEP);
   }
 
   // 7. final checks on the complete result, exactly as the page will see it
