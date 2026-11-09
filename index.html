@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Progetto Fintech ADFH</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{--ink:#1d2733;--muted:#5b6776;--line:#d5dbe3;--bg:#f5f7fa;--card:#fff;--blue:#1f5fa8;--orange:#d9731a;--teal:#1f8a83;--purple:#7b4fa3;--grey:#7a8594}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.45}
+.wrap{max-width:1120px;margin:0 auto;padding:16px}
+h1{font-size:1.6rem;margin:0 0 4px}h2{font-size:1.1rem;margin:0 0 8px}h3{font-size:1rem;margin:12px 0 4px}
+.sub{color:var(--muted);margin:0 0 10px}
+.dates{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.9rem;color:var(--muted);margin:6px 0}
+.dates b{color:var(--ink)}
+.headline{font-size:1.25rem;font-weight:600;background:var(--card);border-left:6px solid var(--blue);padding:12px 14px;border-radius:6px;margin:12px 0}
+.badge{font-size:.8rem;font-weight:400;color:var(--muted);display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin:12px 0}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+.kpi .l{font-size:.85rem;color:var(--muted)}.kpi .v{font-size:1.6rem;font-weight:700;margin:2px 0}.kpi .s{font-size:.8rem;color:var(--muted)}
+.controls{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:flex-start}
+.controls fieldset{border:1px solid var(--line);border-radius:6px;padding:8px 12px}
+.controls legend{font-size:.85rem;color:var(--muted);padding:0 4px}
+label{margin-right:12px;display:inline-block}.controls fieldset{min-width:0;max-width:100%}
+.chartbox{position:relative;height:320px}
+.warn{background:#fff4e0;border:1px solid #e8b76a;border-radius:6px;padding:8px 12px;margin:8px 0;font-size:.9rem}
+.err{background:#ffe9e9;border:2px solid #b33;border-radius:6px;padding:10px 12px;margin:8px 0;font-weight:600}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal;min-width:8em}th{background:#eef2f7}
+.sliders{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 16px;margin:8px 0}
+.sliders div{display:flex;align-items:center;gap:6px}.sliders input[type=range]{flex:1;min-width:70px}
+.shocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px 10px;margin:8px 0}
+.shocks input{width:100%}
+button{font:inherit;padding:4px 10px;border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:5px;cursor:pointer}
+details summary{cursor:pointer;color:var(--blue);margin:6px 0}
+.small{font-size:.85rem;color:var(--muted)}
+footer{text-align:center;color:var(--muted);padding:18px 0 28px}
+#about p,#about li{max-width:880px}
+@media(max-width:820px){.grid4{grid-template-columns:repeat(2,1fr)}h1{font-size:1.35rem}.chartbox{height:280px}}
+@media(max-width:480px){.grid4{grid-template-columns:1fr}.wrap{padding:12px}th{white-space:normal}th,td{padding:4px 5px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title"></h1>
+    <p class="sub" id="question"></p>
+    <div class="dates" id="dates"></div>
+    <div id="alerts"></div>
+  </header>
+  <div class="headline" id="headline"></div>
+
+  <section class="card" id="controls">
+    <h2>Choose what to look at</h2>
+    <p class="small">Every number, chart and table on this page recalculates when you change a choice below.</p>
+    <div class="controls">
+      <fieldset><legend>Obligation categories</legend><span id="cats"></span></fieldset>
+      <fieldset><legend>Portfolio strategy (all cost the same as the obligations)</legend><span id="strategies"></span></fieldset>
+    </div>
+    <div id="customBox" hidden>
+      <h3>Custom weights (share of the budget, must sum to 100%)</h3>
+      <div class="sliders" id="sliders"></div>
+      <div><b id="wsum"></b> <button id="normBtn" type="button">Normalise to 100%</button> <button id="resetBtn" type="button">Reset</button></div>
+    </div>
+  </section>
+
+  <section class="grid4" id="kpis"></section>
+
+  <section class="card"><h2>View 1. Treasury yield curve today versus one month and one year earlier</h2>
+    <p class="small" id="v1note"></p><div class="chartbox"><canvas id="c1" role="img" aria-label="Yield curve chart"></canvas></div>
+    <details><summary>Show data table</summary><div class="tablewrap" id="t1"></div></details></section>
+
+  <section class="card"><h2>View 2. Obligation schedule by year: nominal and present value by category</h2>
+    <p class="small" id="v2note"></p><div class="chartbox"><canvas id="c2" role="img" aria-label="Obligation schedule chart"></canvas></div>
+    <details><summary>Show data table</summary><div class="tablewrap" id="t2"></div></details></section>
+
+  <section class="card"><h2>View 3. Rate sensitivity by maturity bucket: obligations versus the selected portfolio</h2>
+    <p class="small" id="v3note"></p><div class="chartbox"><canvas id="c3" role="img" aria-label="Bucket DV01 chart"></canvas></div>
+    <details open><summary>Show data table (signed DV01 and gaps, all strategies)</summary><div class="tablewrap" id="t3"></div></details></section>
+
+  <section class="card"><h2>View 4. What happens under each scenario (selected strategy)</h2>
+    <p class="small" id="v4note"></p><div class="tablewrap" id="t4"></div>
+    <h3>Custom scenario: shock per tenor in basis points</h3>
+    <p class="small">The 3 Mo shock only matters for a 3 Mo bill held in the Custom strategy: the obligations start at 0.5 years.</p>
+    <div class="shocks" id="shocks"></div>
+  </section>
+
+  <section class="card" id="about"></section>
+</div>
+<footer>Educational project. Not investment advice.</footer>
+
+<script src="data.js"></script>
+<script>
+/* Data loader: all data comes from data.js (window.DASHBOARD_DATA). Nothing is fetched from the network. */
+function loadDashboardData() {
+  return Promise.resolve(window.DASHBOARD_DATA);
+}
+loadDashboardData().then(function (d) {
+  if (!d || !d.summary || !d.data) throw new Error("Dashboard data missing or invalid");
+  render(d.summary, d.data);
+}).catch(function (e) {
+  const message = document.createElement("p");
+  message.textContent = "Unable to load dashboard data. Check data.js. " + e.message;
+  document.body.appendChild(message);
+});
+
+/* ---------------- helpers ---------------- */
+const $ = function (id) { return document.getElementById(id); };
+function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined && text !== null) e.textContent = text; if (cls) e.className = cls; return e; }
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+function fmt(x, d) { if (x === null || x === undefined || !isFinite(x)) return "n/a"; return x.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function sgn(x, d) { if (x === null || !isFinite(x)) return "n/a"; if (Number(Math.abs(x).toFixed(d)) === 0) x = 0; return (x < 0 ? "-" : "") + fmt(Math.abs(x), d); }
+function dsgn(x, d) { if (x === null || !isFinite(x)) return "n/a"; const neg = x < 0 && Math.round(Math.abs(x) * Math.pow(10, d)) > 0; return (neg ? "-$" : "$") + fmt(Math.abs(x), d); }
+function bizDays(fromIso, to) { let n = 0; const d = new Date(fromIso + "T00:00:00Z"); const end = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()); while (d.getTime() < end) { d.setUTCDate(d.getUTCDate() + 1); const w = d.getUTCDay(); if (w !== 0 && w !== 6 && d.getTime() <= end) n++; } return n; }
+function monthsBetween(iso, to) { const a = new Date(iso + "T00:00:00Z"); return (to.getUTCFullYear() - a.getUTCFullYear()) * 12 + (to.getUTCMonth() - a.getUTCMonth()); }
+
+/* ---------------- calculation engine ---------------- */
+function interp(yrs, ys, t) {
+  const n = yrs.length; if (t >= yrs[n - 1]) return ys[n - 1];
+  let i = 0; while (i + 1 < n && yrs[i + 1] <= t) i++;
+  return ys[i] + (ys[i + 1] - ys[i]) * (t - yrs[i]) / (yrs[i + 1] - yrs[i]);
+}
+function bootstrap(yrs, ys) {
+  const df = []; let s = 0;
+  for (let n = 1; n <= 60; n++) {
+    const t = n / 2, p = interp(yrs, ys, t); let d;
+    if (t <= 1) d = Math.pow(1 + p / 2, -2 * t); else { const c = p / 2; d = (1 - c * s) / (1 + c); }
+    df.push(d); s += d;
+  }
+  return df;
+}
+function zeros(df) { return df.map(function (d, n) { return 2 * (Math.pow(d, -1 / (n + 1)) - 1); }); }
+function dot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+
+const App = { state: null, charts: {}, blocked: false };
+
+function validate(summary, data) {
+  const errs = [], c = data.curve, o = data.obligations;
+  if (!c || c.tenors.length !== 10) errs.push("Curve must have 10 tenors.");
+  const i = c ? c.dates.indexOf(summary.as_of) : -1;
+  if (i < 0) errs.push("The curve date " + summary.as_of + " is not in the saved curve data.");
+  else c.tenors.forEach(function (t) { const v = c.yields_pct[t][i]; if (typeof v !== "number" || !isFinite(v)) errs.push("Missing or non numeric yield for " + t + " on " + summary.as_of + "."); else if (v < -1 || v > 20) errs.push("Yield for " + t + " is outside the plausible range (-1 to 20 percent): " + v + ". Check that yields are in percent."); });
+  if (o.unit !== "USD millions") errs.push("Obligation unit must be USD millions, found: " + o.unit);
+  ["debt", "lease"].forEach(function (k) {
+    const v = o[k].values; if (v.length !== 6 || v.some(function (x) { return typeof x !== "number" || !isFinite(x) || x < 0; })) errs.push("Obligation values for " + k + " are missing or invalid.");
+    else if (Math.abs(v.reduce(function (a, b) { return a + b; }, 0) - o[k].control_total) > 0.5) errs.push("Obligation buckets for " + k + " do not add up to the filed total (wrong unit or typing error?). Sum " + fmt(v.reduce(function (a, b) { return a + b; }, 0), 1) + " versus " + fmt(o[k].control_total, 1) + " USD millions.");
+  });
+  const p = o.pension; if (p.values.length !== 6 || p.values.some(function (x) { return typeof x !== "number" || !isFinite(x) || x < 0; })) errs.push("Pension values are missing or invalid.");
+  else p.values.forEach(function (x, k) { if (Math.abs(x + p.medical_and_life_values[k] - p.companyfacts_total_values[k]) > 0.5) errs.push("Pension plan value for " + p.periods[k] + " plus medical and life does not equal the filed total (wrong unit?)."); });
+  return errs;
+}
+
+function curveYields(data, iso) { const c = data.curve, i = c.dates.indexOf(iso); if (i < 0) return null; const y = c.tenors.map(function (t) { return c.yields_pct[t][i]; }); return y.some(function (v) { return typeof v !== "number"; }) ? null : y.map(function (v) { return v / 100; }); }
+
+/* Schedule dating: the 10-K payment schedule is dated at the fiscal year end, the curve at a later date. Each mid year payment is shifted by the elapsed time e:
+   s = year - 0.5 - e. s <= 0: already due, dropped. 0 < s < 0.5: all at 0.5. Otherwise split linearly between the two neighbouring half year grid points. */
+function elapsedYears() { const a = new Date(App.summary.as_of + "T00:00:00Z"), f = new Date(App.data.obligations.fiscal_year_end + "T00:00:00Z"); return Math.max(0, (a - f) / 86400000 / 365.25); }
+function allocate(s) {
+  if (s <= 0) return [];
+  if (s < 0.5) return [[0, 1]];
+  const k = Math.floor(s / 0.5 + 1e-9);
+  if (k >= 60) return [[59, 1]];
+  const w = (s - k * 0.5) / 0.5;
+  return w < 1e-9 ? [[k - 1, 1]] : [[k - 1, 1 - w], [k, w]];
+}
+function schedule(st) {
+  const o = App.data.obligations, sp = o.spread, rows = [], e = elapsedYears();
+  const cf = new Array(60).fill(0);
+  for (let y = 1; y <= 30; y++) {
+    const d = !st.cats.debt ? 0 : (y <= 5 ? o.debt.values[y - 1] : (y <= sp.debt_and_lease_after_year5_until_year ? o.debt.values[5] / (sp.debt_and_lease_after_year5_until_year - 5) : 0));
+    const l = !st.cats.lease ? 0 : (y <= 5 ? o.lease.values[y - 1] : (y <= sp.debt_and_lease_after_year5_until_year ? o.lease.values[5] / (sp.debt_and_lease_after_year5_until_year - 5) : 0));
+    const p = !st.cats.pens ? 0 : (y <= 5 ? o.pension.values[y - 1] : (y <= sp.pension_after_year5_until_year ? o.pension.values[5] / (sp.pension_after_year5_until_year - 5) : 0));
+    const al = allocate(y - 0.5 - e); rows.push({ year: y, t: y - 0.5 - e, alloc: al, debt: d, lease: l, pens: p }); al.forEach(function (a) { cf[a[0]] += (d + l + p) * a[1]; });
+  }
+  return { rows: rows, cf: cf, e: e };
+}
+
+function compute(st) {
+  const d = App.data, yrs = d.curve.years, y0 = App.y0, bump = d.meta.bump_bp, b = bump / 1e4, lim = d.portfolio.bucket_limits_years;
+  const sch = schedule(st), DF = bootstrap(yrs, y0), z = zeros(DF);
+  const R = { sch: sch, DF: DF, z: z };
+  R.pv = dot(sch.cf, DF);
+  if (!(R.pv > 0)) { R.empty = true; return R; }
+  const dfUp = z.map(function (zz, n) { return Math.pow(1 + (zz + b) / 2, -(n + 1)); });
+  const bk = z.map(function (zz, n) { const t = (n + 1) / 2; return t <= lim[0] ? 0 : (t <= lim[1] ? 1 : 2); });
+  const dfB = [0, 1, 2].map(function (k) { return dfUp.map(function (x, n) { return bk[n] === k ? x : DF[n]; }); });
+  R.dv01 = (dot(sch.cf, dfUp) - R.pv) / bump;
+  R.bdv01 = dfB.map(function (a) { return (dot(sch.cf, a) - R.pv) / bump; });
+  R.dur = -R.dv01 / R.pv * 10000;
+  R.liquid = d.liquid_assets.cash_and_equivalents; R.cov = R.liquid / R.pv;
+  // instruments
+  const types = d.portfolio.instrument_types; R.inst = [];
+  for (let k = 0; k < 10; k++) {
+    const T = yrs[k], y = y0[k]; let I, B;
+    if (types[k] === "Bill") { I = (Math.pow(1 + (y + b) / 2, -2 * T) / Math.pow(1 + y / 2, -2 * T) - 1) / bump; B = [I, 0, 0]; }
+    else {
+      const N = Math.round(2 * T); const part = function (arr) { let s = 0; for (let i = 0; i < N; i++) s += arr[i] - DF[i]; return (y / 2 * s + arr[N - 1] - DF[N - 1]) / bump; };
+      I = part(dfUp); B = dfB.map(part);
+    }
+    R.inst.push({ T: T, y: y, bill: types[k] === "Bill", I: I, B: B, D: -I * 10000 });
+  }
+  // strategy weights
+  const w = {}; R.flags = [];
+  const D = R.inst.map(function (x) { return x.D; });
+  let lo = -1; for (let k = 0; k < 10; k++) if (D[k] <= R.dur) lo = k;
+  if (lo < 0 || lo >= 9) { R.flags.push("Bullet: obligations duration is outside the instrument range, bullet is not duration matched."); lo = Math.max(0, Math.min(8, lo)); }
+  const wl = (D[lo + 1] - R.dur) / (D[lo + 1] - D[lo]); w.bullet = new Array(10).fill(0); w.bullet[lo] = wl; w.bullet[lo + 1] = 1 - wl; R.bulletPair = [lo, lo + 1];
+  const w30 = (R.dur - D[3]) / (D[9] - D[3]); w.barbell = new Array(10).fill(0); w.barbell[3] = 1 - w30; w.barbell[9] = w30;
+  if (w30 < 0 || w30 > 1) R.flags.push("Barbell: weights fall outside 0 to 100 percent, barbell cannot match the obligations duration.");
+  const nb = types.filter(function (t) { return t === "Par bond"; }).length; w.ladder = types.map(function (t) { return t === "Par bond" ? 1 / nb : 0; });
+  const sumC = st.custom.reduce(function (a, b2) { return a + b2; }, 0);
+  w.custom = Math.abs(sumC - 100) < 1e-9 ? st.custom.map(function (x) { return x / 100; }) : null;
+  R.w = w;
+  R.strat = {};
+  ["cfm", "bullet", "barbell", "ladder", "custom"].forEach(function (s) {
+    if (s === "cfm") { R.strat[s] = { dv01: R.dv01, b: R.bdv01.slice(), cost: R.pv }; }
+    else if (!w[s]) { R.strat[s] = null; return; }
+    else { const ww = w[s]; R.strat[s] = { dv01: R.pv * dot(ww, R.inst.map(function (x) { return x.I; })), b: [0, 1, 2].map(function (k) { return R.pv * dot(ww, R.inst.map(function (x) { return x.B[k]; })); }), cost: R.pv }; }
+    const S = R.strat[s]; S.gap = S.dv01 - R.dv01; S.bgap = S.b.map(function (x, k) { return x - R.bdv01[k]; });
+  });
+  return R;
+}
+
+function scenarioShocks(sc) {
+  const d = App.data, yrs = d.curve.years, c = d.curve;
+  if (sc.kind === "parallel") return yrs.map(function () { return sc.shock_bp; });
+  if (sc.kind === "steepener" || sc.kind === "flattener") {
+    const f = function (T) { const x = Math.max(sc.short_tenor_years, Math.min(sc.long_tenor_years, T)); return sc.short_bp + (sc.long_bp - sc.short_bp) * (x - sc.short_tenor_years) / (sc.long_tenor_years - sc.short_tenor_years); };
+    return yrs.map(function (T) { return sc.kind === "steepener" ? f(T) : -f(T); });
+  }
+  if (sc.kind === "replay") {
+    const i0 = c.dates.indexOf(sc.start), i1 = c.dates.indexOf(sc.end); if (i0 < 0 || i1 < 0) return null;
+    const out = []; for (let k = 0; k < 10; k++) { const a = c.yields_pct[c.tenors[k]][i0], b2 = c.yields_pct[c.tenors[k]][i1]; if (typeof a !== "number" || typeof b2 !== "number") return null; out.push((b2 - a) * 100); }
+    return out;
+  }
+  if (sc.kind === "custom") return sc.shocks.some(function (x) { return typeof x !== "number" || !isFinite(x); }) ? null : sc.shocks.slice();
+  return null;
+}
+
+function runScenario(R, st, sc) {
+  const d = App.data, yrs = d.curve.years, shocks = scenarioShocks(sc);
+  const res = { name: sc.name, type: sc.type, shocks: shocks };
+  if (!shocks) { res.invalid = true; return res; }
+  const ys = App.y0.map(function (y, k) { return y + shocks[k] / 1e4; });
+  res.negative = Math.min.apply(null, ys) < 0;
+  const DFs = bootstrap(yrs, ys);
+  res.dObl = dot(R.sch.cf, DFs) - R.pv;
+  if (sc.kind === "parallel") res.firstOrder = R.dv01 * sc.shock_bp;
+  const instVal = R.inst.map(function (x, k) {
+    if (x.bill) return Math.pow(1 + ys[k] / 2, -2 * x.T) / Math.pow(1 + x.y / 2, -2 * x.T);
+    const N = Math.round(2 * x.T); let s = 0; for (let i = 0; i < N; i++) s += DFs[i]; return x.y / 2 * s + DFs[N - 1];
+  });
+  res.instVal = instVal;
+  ["cfm", "bullet", "barbell", "ladder", "custom"].forEach(function (s) {
+    if (s === "cfm") res[s] = { d: res.dObl, gap: 0 };
+    else if (!R.w[s]) res[s] = null;
+    else { const v = R.pv * dot(R.w[s], instVal); res[s] = { d: v - R.pv, gap: v - R.pv - res.dObl }; }
+  });
+  return res;
+}
+
+/* ---------------- rendering ---------------- */
+const STRAT = [["cfm", "Cash flow matching (theoretical benchmark)"], ["bullet", "Bullet"], ["barbell", "Barbell"], ["ladder", "Ladder"], ["custom", "Custom"]];
+const STRAT_SHORT = { cfm: "Cash flow matching", bullet: "Bullet", barbell: "Barbell", ladder: "Ladder", custom: "Custom" };
+const CAT = [["debt", "Debt principal"], ["lease", "Operating leases"], ["pens", "Pensions"]];
+const BUCKETS = ["0 to 2 years", "2 to 7 years", "7 to 30 years"];
+
+function table(headers, rows) {
+  const t = el("table"), th = el("thead"), trh = el("tr");
+  headers.forEach(function (h) { trh.appendChild(el("th", h)); }); th.appendChild(trh); t.appendChild(th);
+  const tb = el("tbody"); rows.forEach(function (r) { const tr = el("tr"); r.forEach(function (c) { tr.appendChild(el("td", c)); }); tb.appendChild(tr); }); t.appendChild(tb); return t;
+}
+function setChart(id, cfg) {
+  if (!window.Chart) { const b = $(id).parentNode; if (!b.querySelector(".warn")) b.appendChild(el("p", "The chart library could not be loaded (internet needed for the charts). The numbers are in the data table below.", "warn")); $(id).style.display = "none"; b.style.height = "auto"; const det = b.parentNode.querySelector("details"); if (det) det.open = true; return; }
+  if (App.charts[id]) { App.charts[id].destroy(); }
+  App.charts[id] = new Chart($(id), cfg);
+}
+const PAL = ["#1f5fa8", "#d9731a", "#1f8a83", "#7b4fa3", "#7a8594"];
+
+function currentHeadline(st, R) {
+  const S = R.strat[st.strategy];
+  const gap = S ? S.gap : null;
+  return "Securing " + (st.cats.debt && st.cats.lease && st.cats.pens ? "the listed" : "the selected") + " obligations costs $" + fmt(R.pv / 1000, 1) + "bn today; liquid assets cover " + fmt(R.cov * 100, 1) + "%. " + STRAT_SHORT[st.strategy] + " portfolio gap: " + (S ? dsgn(gap, 1) + "m per bp." : "n/a (custom weights must sum to 100%).");
+}
+function isDefault(st) { const dflt = App.data.portfolio.default_strategy; return st.cats.debt && st.cats.lease && st.cats.pens && st.strategy === dflt; }
+
+function update() {
+  const st = App.state, d = App.data, s = App.summary;
+  if (App.blocked) return;
+  const R = compute(st);
+  const kp = $("kpis"); clear(kp);
+  const alerts = $("alerts"); Array.prototype.slice.call(alerts.querySelectorAll(".dyn")).forEach(function (n) { alerts.removeChild(n); });
+  if (R.empty) {
+    $("headline").textContent = "No obligation category is selected. Tick at least one category.";
+    ["t1", "t2", "t3", "t4"].forEach(function (i) { clear($(i)); });
+    ["c1", "c2", "c3"].forEach(function (c) { if (App.charts[c]) { App.charts[c].destroy(); delete App.charts[c]; } });
+    return;
+  }
+  App.R = R;
+  const S = R.strat[st.strategy];
+  // headline
+  const hl = $("headline"); clear(hl);
+  if (isDefault(st)) { hl.appendChild(document.createTextNode(s.headline)); hl.appendChild(el("span", "Saved headline for the default view (all categories, " + STRAT_SHORT[d.portfolio.default_strategy] + "). Gap: when all rates rise 1 bp the portfolio loses (negative) or gains (positive) this much more than the obligations.", "badge")); }
+  else { hl.appendChild(document.createTextNode(currentHeadline(st, R))); hl.appendChild(el("span", "Your selection (the saved default headline is: " + s.headline + ")", "badge")); }
+  // KPIs
+  const pvM = (function () { const st2 = st; const sc = schedule(st2); return dot(sc.cf, bootstrap(d.curve.years, App.yM)); })();
+  const tr = function (a, b2) { return a > b2 * 1.005 ? "up" : (a < b2 * 0.995 ? "down" : "flat"); };
+  const K = [
+    ["Cost to secure obligations", "$" + fmt(R.pv / 1000, 1) + "bn", "USD " + fmt(R.pv, 1) + " million; " + tr(R.pv, pvM) + " versus " + d.curve.ref_dates.month_earlier],
+    ["Coverage ratio", fmt(R.cov * 100, 1) + "%", "Liquid assets USD " + fmt(R.liquid, 1) + " million (cash and equivalents); " + tr(R.cov, R.liquid / pvM) + " versus " + d.curve.ref_dates.month_earlier],
+    ["Obligations DV01", dsgn(R.dv01, 2) + "m per bp", "Value change if all rates rise 0.01 percentage points; duration " + fmt(R.dur, 2) + " years"],
+    [STRAT_SHORT[st.strategy] + " DV01 gap", S ? dsgn(S.gap, 2) + "m per bp" : "n/a", S ? (Math.abs(S.gap) < 0.005 && st.strategy !== "cfm" ? "Total DV01 matched by construction; bucket gaps remain (View 3), so a change in the shape of the curve can still open a gap" : "Portfolio DV01 minus obligations DV01. Negative: the portfolio loses more than the obligations when rates rise 1 bp") : "Custom weights must sum to 100%"]
+  ];
+  K.forEach(function (k) { const c = el("div", null, "kpi"); c.appendChild(el("div", k[0], "l")); c.appendChild(el("div", k[1], "v")); c.appendChild(el("div", k[2], "s")); kp.appendChild(c); });
+  R.flags.forEach(function (f) { const w = el("div", f, "warn dyn"); alerts.appendChild(w); });
+  // View 1
+  const c = d.curve, i0 = c.dates.indexOf(s.as_of), iM = c.dates.indexOf(c.ref_dates.month_earlier), iY = c.dates.indexOf(c.ref_dates.year_earlier);
+  const ser = function (i) { return c.tenors.map(function (t) { const v = c.yields_pct[t][i]; return typeof v === "number" ? v : null; }); };
+  $("v1note").textContent = "Par yields in percent. 10 Yr today: " + fmt(c.yields_pct["10 Yr"][i0], 2) + "%; 30 Yr minus 2 Yr: " + fmt(c.yields_pct["30 Yr"][i0] - c.yields_pct["2 Yr"][i0], 2) + " percentage points. Source: US Department of the Treasury.";
+  setChart("c1", { type: "line", data: { labels: c.tenors, datasets: [
+    { label: "Today (" + s.as_of + ")", data: ser(i0), borderColor: PAL[0], backgroundColor: PAL[0], borderWidth: 3, pointStyle: "circle", tension: 0 },
+    { label: "One month earlier (" + c.dates[iM] + ")", data: ser(iM), borderColor: PAL[1], backgroundColor: PAL[1], borderDash: [6, 4], pointStyle: "rect", tension: 0 },
+    { label: "One year earlier (" + c.dates[iY] + ")", data: ser(iY), borderColor: PAL[3], backgroundColor: PAL[3], borderDash: [2, 3], pointStyle: "triangle", tension: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: "Maturity (tenor)" } }, y: { title: { display: true, text: "Par yield (percent)" } } }, plugins: { legend: { position: "bottom" } } } });
+  clear($("t1")); $("t1").appendChild(table(["Tenor", "Today (%)", "One month earlier (%)", "One year earlier (%)"], c.tenors.map(function (t, k) { return [t, fmt(ser(i0)[k], 2), fmt(ser(iM)[k], 2), fmt(ser(iY)[k], 2)]; })));
+  // View 2
+  const yrsL = R.sch.rows.map(function (r) { return String(r.year); });
+  const pvc = function (key) { return R.sch.rows.map(function (r) { return r[key] * r.alloc.reduce(function (a, w) { return a + w[1] * R.DF[w[0]]; }, 0); }); };
+  const tot = R.sch.rows.map(function (r) { return r.debt + r.lease + r.pens; });
+  $("v2note").textContent = "USD millions. Bars: present value by category (nominal payment times discount factor). Line: nominal payments. Payments fall in the middle of each year, counted from the curve date (the schedule is moved forward by " + fmt(elapsedYears(), 2) + " years; payments already due, mostly in year 1, have no present value); amounts after year 5 are spread evenly (debt and leases to year " + d.obligations.spread.debt_and_lease_after_year5_until_year + ", pensions to year " + d.obligations.spread.pension_after_year5_until_year + "). This spreading rule is an assumption.";
+  const ds = []; CAT.forEach(function (cat, k) { if (st.cats[cat[0]]) ds.push({ type: "bar", label: "PV " + cat[1], data: pvc(cat[0]), backgroundColor: PAL[k], stack: "pv", order: 2 }); });
+  ds.push({ type: "line", label: "Nominal total", data: tot, borderColor: PAL[4], backgroundColor: PAL[4], borderWidth: 2, pointRadius: 2, order: 1 });
+  setChart("c2", { data: { labels: yrsL, datasets: ds }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, title: { display: true, text: "Year of the 10-K payment schedule" } }, y: { stacked: true, beginAtZero: true, title: { display: true, text: "USD millions" } } }, plugins: { legend: { position: "bottom" } } } });
+  clear($("t2")); $("t2").appendChild(table(["Year", "Nominal debt", "Nominal leases", "Nominal pensions", "PV total"], R.sch.rows.map(function (r, k) { return [String(r.year), fmt(r.debt, 1), fmt(r.lease, 1), fmt(r.pens, 1), fmt(pvc("debt")[k] + pvc("lease")[k] + pvc("pens")[k], 1)]; })));
+  // View 3
+  $("v3note").textContent = "Value lost per +1 basis point in each maturity bucket, USD millions (the table shows signed values). Obligations versus the " + STRAT_SHORT[st.strategy] + " portfolio, bought at par for the same cost. Equal bars in every bucket mean no hole opens when that part of the curve moves.";
+  const portB = S ? S.b : [null, null, null];
+  setChart("c3", { type: "bar", data: { labels: BUCKETS, datasets: [
+    { label: "Obligations", data: R.bdv01.map(function (x) { return -x; }), backgroundColor: PAL[0] },
+    { label: STRAT_SHORT[st.strategy] + " portfolio", data: portB.map(function (x) { return x === null ? null : -x; }), backgroundColor: PAL[1] }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: "Maturity bucket" } }, y: { beginAtZero: true, title: { display: true, text: "USD millions lost per +1 bp" } } }, plugins: { legend: { position: "bottom" } } } });
+  const rows3 = [["Obligations", fmt(R.bdv01[0], 2), fmt(R.bdv01[1], 2), fmt(R.bdv01[2], 2), fmt(R.dv01, 2), "-"]];
+  STRAT.forEach(function (sx) { const Sx = R.strat[sx[0]]; rows3.push(Sx ? [STRAT_SHORT[sx[0]] + " (gap)", sgn(Sx.bgap[0], 2), sgn(Sx.bgap[1], 2), sgn(Sx.bgap[2], 2), sgn(Sx.gap, 2), fmt(R.pv, 1)] : [STRAT_SHORT[sx[0]] + " (gap)", "n/a", "n/a", "n/a", "n/a", "weights must sum to 100%"]); });
+  clear($("t3")); $("t3").appendChild(table(["USD millions per bp", BUCKETS[0], BUCKETS[1], BUCKETS[2], "Total", "Cost"], rows3));
+  // View 4
+  const out = [];
+  const scs = d.scenarios.concat([{ id: "custom", name: "Custom (your shocks)", kind: "custom", shocks: st.shocks, type: "user input" }]);
+  scs.forEach(function (sc) { out.push(runScenario(R, st, sc)); });
+  App.scen = out;
+  $("v4note").textContent = "Change in value in USD millions under a shocked curve (full repricing: the shocked par curve is bootstrapped again). Gap = portfolio change minus obligations change (a negative gap means the portfolio is worth less relative to the obligations in that scenario). Obligations change is the change in the cost to secure: positive means securing the payments became more expensive. First order = obligations DV01 times the shock, shown for parallel scenarios; the difference to full repricing is convexity. Predefined shocks are model assumptions; replays are the actual Treasury par yield changes between two dates applied to today's curve. Strategy shown: " + STRAT_SHORT[st.strategy] + ".";
+  const rows4 = out.map(function (r, k) {
+    if (r.invalid) return [r.name, "n/a (invalid or missing shock)", "n/a", "n/a", "n/a", ""];
+    const P = r[st.strategy];
+    return [r.name, sgn(r.dObl, 1), P ? sgn(P.d, 1) : "n/a", P ? sgn(P.gap, 1) : "n/a", r.firstOrder !== undefined ? sgn(r.firstOrder, 1) : "-", (r.negative ? "negative yield after shock; " : "") + r.type];
+  });
+  clear($("t4")); $("t4").appendChild(table(["Scenario", "Obligations change", "Portfolio change", "Gap", "First order (obligations)", "Note"], rows4));
+}
+
+function buildControls() {
+  const st = App.state, d = App.data;
+  const cats = $("cats"); CAT.forEach(function (c) { const l = el("label"); const i = el("input"); i.type = "checkbox"; i.checked = st.cats[c[0]]; i.addEventListener("change", function () { st.cats[c[0]] = i.checked; update(); }); l.appendChild(i); l.appendChild(document.createTextNode(" " + c[1])); cats.appendChild(l); });
+  const sg = $("strategies"); STRAT.forEach(function (s) { const l = el("label"); const i = el("input"); i.type = "radio"; i.name = "strat"; i.value = s[0]; i.checked = st.strategy === s[0]; i.addEventListener("change", function () { st.strategy = s[0]; $("customBox").hidden = s[0] !== "custom"; update(); }); l.appendChild(i); l.appendChild(document.createTextNode(" " + s[1])); sg.appendChild(l); });
+  const sl = $("sliders"); const outs = [];
+  d.curve.tenors.forEach(function (t, k) {
+    const row = el("div"); row.appendChild(el("span", t)); const r = el("input"); r.type = "range"; r.min = 0; r.max = 100; r.step = 1; r.value = st.custom[k]; r.setAttribute("aria-label", "Weight of " + t);
+    const o = el("span", st.custom[k] + "%"); o.style.minWidth = "3em"; r.addEventListener("input", function () { st.custom[k] = Number(r.value); o.textContent = r.value + "%"; wsum(); update(); }); row.appendChild(r); row.appendChild(o); sl.appendChild(row); outs.push([r, o]);
+  });
+  function wsum() { const s = st.custom.reduce(function (a, b) { return a + b; }, 0); const w = $("wsum"); w.textContent = "Total: " + s + "%" + (s === 100 ? "" : " (must be 100%; Custom results are hidden until it is)"); }
+  function setAll(arr) { arr.forEach(function (v, k) { st.custom[k] = v; outs[k][0].value = v; outs[k][1].textContent = v + "%"; }); wsum(); update(); }
+  $("normBtn").addEventListener("click", function () { const s = st.custom.reduce(function (a, b) { return a + b; }, 0); if (s <= 0) return; const raw = st.custom.map(function (v) { return v / s * 100; }); const rd = raw.map(Math.floor); let rem = 100 - rd.reduce(function (a, b) { return a + b; }, 0); raw.map(function (v, k) { return [v - Math.floor(v), k]; }).sort(function (a, b) { return b[0] - a[0]; }).forEach(function (p) { if (rem > 0) { rd[p[1]]++; rem--; } }); setAll(rd); });
+  $("resetBtn").addEventListener("click", function () { setAll(d.portfolio.custom_default_weights_pct.slice()); });
+  wsum();
+  const sh = $("shocks"); d.curve.tenors.forEach(function (t, k) { const w = el("div"); w.appendChild(el("label", t + " (bp)")); const i = el("input"); i.type = "number"; i.step = "1"; i.value = st.shocks[k]; i.setAttribute("aria-label", "Custom shock in basis points for " + t); i.addEventListener("input", function () { st.shocks[k] = i.value === "" ? NaN : Number(i.value); update(); }); w.appendChild(i); sh.appendChild(w); });
+}
+
+function buildAbout(summary, data) {
+  const a = $("about"); const o = data.obligations, sp = o.spread, m = data.meta;
+  a.appendChild(el("h2", "About this dashboard"));
+  const P = function (t) { a.appendChild(el("p", t)); };
+  a.appendChild(el("h3", "What it does"));
+  P("Organisations with payments they cannot avoid (debt repayments, lease payments, pension benefits) can ask what it would cost today to make those payments safe, and how that cost moves when interest rates move. This page takes the payment schedule of one US listed company (" + o.company + ", form " + o.form + " for the fiscal year ended " + o.fiscal_year_end + ") and the US Treasury yield curve of the day. It shows (1) the cost today of covering every payment with risk free US Treasuries, (2) how much of that cost the liquid assets cover, and (3) how different Treasury portfolio designs would hold up if the curve moves. It describes and simulates. It does not forecast rates and does not tell anyone to buy or sell. The demo company is only an example: any organisation can load its own schedule in the same format.");
+  a.appendChild(el("h3", "Data"));
+  const ul = el("ul"); m.sources.forEach(function (s) { const li = el("li"); li.appendChild(document.createTextNode(s.provider + ": " + s.name + ", accessed " + s.access_date + ". ")); const l1 = el("a", "Source"); l1.href = s.url; l1.target = "_blank"; l1.rel = "noopener"; li.appendChild(l1); li.appendChild(document.createTextNode(" | ")); const l2 = el("a", "Terms"); l2.href = s.terms_url; l2.target = "_blank"; l2.rel = "noopener"; li.appendChild(l2); li.appendChild(document.createTextNode(". Permission basis: " + s.permission + ".")); ul.appendChild(li); });
+  a.appendChild(ul);
+  P("Dates: the curve is as of " + summary.as_of + " (observation date, not the download date); the obligations are as of " + o.fiscal_year_end + " (accession " + o.accession_number + ", filed " + o.filed + "); the data file was saved on " + m.generated + ". Yields are in percent, money in USD millions.");
+  a.appendChild(el("h3", "Method in plain words"));
+  const steps = [
+    "Discount factor: how much one dollar paid in the future is worth today. Par yields are the yields of newly issued Treasuries; they are turned into discount factors for every half year from 0.5 to 30 years (a bootstrap). Maturities up to one year are treated as zero coupon yields with semiannual compounding; yields between published tenors are interpolated linearly.",
+    "Cost to secure = sum of each payment times its discount factor. Payments are placed in the middle of each year of the 10-K schedule, and the schedule is moved forward from the fiscal year end to the curve date: payments already due are dropped and later ones are split between the two nearest half years so the nominal amount is kept.",
+    "Coverage ratio = cash and cash equivalents divided by the cost to secure.",
+    "DV01 = change in value when all zero rates rise by one basis point (0.01 percentage points). It is negative because values fall when rates rise. Bucket DV01 does the same for 0 to 2, 2 to 7 and 7 to 30 years separately. Gap = portfolio DV01 minus obligations DV01. A gap of -3.5 (an illustrative number, not the current result) means that when rates rise by 1 basis point the portfolio loses USD 3.5 million more than the obligations lose, so the net position gets worse; a positive gap means the opposite.",
+    "Strategies all cost the same as the obligations, so they compare on equal terms. Cash flow matching is a theoretical zero coupon bond per payment date (gap zero by construction). Bullet uses the two Treasuries around the obligations' duration, barbell uses 2 and 30 years, both weighted to match total DV01. Ladder holds equal value in every coupon tenor. Custom uses your weights.",
+    "Scenarios shock the par curve in absolute basis points, bootstrap it again and reprice everything. Replays apply the real change of the Treasury curve between two dates."];
+  const ol = el("ol"); steps.forEach(function (s) { ol.appendChild(el("li", s)); }); a.appendChild(ol);
+  a.appendChild(el("h3", "Main assumptions"));
+  const as = el("ul");
+  ["After year 5, debt and lease amounts are spread evenly over years 6 to " + sp.debt_and_lease_after_year5_until_year + "; pension benefits after year 5 are spread evenly over years 6 to " + sp.pension_after_year5_until_year + ". This spreading rule has the largest effect on the result.",
+   "Payments fall in the middle of each year; bills up to one year are zero coupon yields.",
+   "Dates: the payment schedule is as of " + o.fiscal_year_end + " and the curve is as of " + summary.as_of + ". The model rolls the schedule forward by " + fmt(o.elapsed_years, 2) + " years. This is an approximation: payments of the current year are treated as paid at the middle of that year, so any amount still due before year end is dropped. The last row of the sensitivity table shows the old method without roll forward.",
+   "Pensions: pension plans only, from the filing's benefit payment table. " + o.notes.join(" "),
+   "Liquid assets: " + data.liquid_assets.note,
+   "Scenario shocks and replay windows are model assumptions; each is labelled in View 4. The one month comparison uses the nearest stored curve date on or before one month earlier."].forEach(function (t) { as.appendChild(el("li", t)); });
+  a.appendChild(as);
+  if (o.sensitivity) { a.appendChild(el("h3", "How much the assumptions matter")); P("Cost to secure (USD millions) and coverage ratio when one assumption changes, on the curve of " + summary.as_of + ". The base case is the dashboard default."); var sw = document.createElement("div"); sw.className = "tablewrap"; sw.appendChild(table(["Assumption change", "Cost to secure", "Change", "Coverage"], o.sensitivity.map(function (r) { return [r.label, fmt(r.cost, 1), (r.change_pct > 0 ? "+" : "") + fmt(r.change_pct, 1) + "%", fmt(r.coverage * 100, 1) + "%"]; }))); a.appendChild(sw); }
+  a.appendChild(el("h3", "Limitations: when this can mislead"));
+  const li2 = el("ul");
+  ["The bootstrap approximates, but does not reproduce, the Treasury's own curve method.",
+   "Risk free discounting ignores the company's credit spread: the result is the cost of a risk free defeasance, not the market value of its debt.",
+   "A coverage ratio below 1 is not a sign of distress: operating cash flows are not counted. Credit risk, taxes, trading costs and non USD obligations are out of scope. Liquid assets are cash at the fiscal year end while the obligations are rolled forward to the curve date, so some of that cash may already have paid the year 1 payments that the roll forward drops.",
+   "Pension payments are disclosed for ten years only, so pension obligations are understated. Pension benefits are normally paid from separate plan assets that are not counted, so the coverage ratio with pensions is conservative; the sensitivity table shows it without pensions.",
+   "Only the listed obligations are covered: debt principal without interest, operating lease payments (no finance leases), and pension benefits for ten years. The cost to secure is therefore a lower bound of the full cost of the company's obligations.",
+   "Portfolios are hypothetical and Treasury yields are not bond total returns. Historical replays show plausible moves, not forecasts.",
+   "Data becomes stale: this page warns when the curve is older than " + m.stale_rules.curve_business_days + " business days or the filing's fiscal year end is older than " + m.stale_rules.fiscal_year_months + " months."].forEach(function (t) { li2.appendChild(el("li", t)); });
+  a.appendChild(li2);
+  P("Educational project. Not investment advice.");
+}
+
+function render(summary, data) {
+  App.summary = summary; App.data = data;
+  $("title").textContent = summary.title; $("question").textContent = summary.question;
+  const o = data.obligations, now = new Date();
+  const dates = $("dates"); [["Curve as of", summary.as_of], ["Obligations: fiscal year ended", o.fiscal_year_end + " (" + o.company + ")"], ["Data file saved", data.meta.generated]].forEach(function (p) { const s = el("span"); s.appendChild(document.createTextNode(p[0] + " ")); s.appendChild(el("b", p[1])); dates.appendChild(s); });
+  const errs = validate(summary, data);
+  buildAbout(summary, data);
+  if (errs.length) {
+    App.blocked = true;
+    errs.forEach(function (e) { $("alerts").appendChild(el("div", "Cannot compute the affected outputs: " + e, "err")); });
+    $("headline").textContent = "Outputs are not shown because the input data failed validation. Nothing has been replaced by zero.";
+    return;
+  }
+  const bd = bizDays(summary.as_of, now), mo = monthsBetween(o.fiscal_year_end, now);
+  if (bd > data.meta.stale_rules.curve_business_days) $("alerts").appendChild(el("div", "Stale curve: the Treasury curve is " + bd + " business days old (limit " + data.meta.stale_rules.curve_business_days + ").", "warn"));
+  if (mo > data.meta.stale_rules.fiscal_year_months) $("alerts").appendChild(el("div", "Stale obligations: the fiscal year end is " + mo + " months old (limit " + data.meta.stale_rules.fiscal_year_months + ").", "warn"));
+  App.y0 = curveYields(data, summary.as_of); App.yM = curveYields(data, data.curve.ref_dates.month_earlier);
+  if (!App.yM) { App.yM = App.y0; $("alerts").appendChild(el("div", "The one month earlier curve is missing a value; trend labels compare with today.", "warn")); }
+  App.state = { cats: { debt: true, lease: true, pens: true }, strategy: data.portfolio.default_strategy, custom: data.portfolio.custom_default_weights_pct.slice(), shocks: data.curve.tenors.map(function () { return 0; }) };
+  buildControls();
+  update();
+}
+</script>
+</body>
+</html>
