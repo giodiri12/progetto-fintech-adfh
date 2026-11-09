@@ -12,7 +12,7 @@
 const REPO = "giodiri12/progetto-fintech-adfh";
 const WORKFLOW = "update-curve.yml";
 const COOLDOWN_MINUTES = 5;
-const ALLOWED_ORIGINS = ["https://progetto-fintech-adfh.vercel.app", "https://giodiri12.github.io"];
+const ALLOWED_ORIGINS = ["https://progetto-fintech-adfh.vercel.app"];
 const PREVIEW_ORIGIN = /^https:\/\/progetto-fintech-adfh-[a-z0-9-]+\.vercel\.app$/;
 
 function send(res, status, body) {

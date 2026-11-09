@@ -8,7 +8,7 @@ The demo case uses the obligations published by Northrop Grumman Corp (10-K for 
 
 *Educational project. Not investment advice.*
 
-**Live dashboard:** https://progetto-fintech-adfh.vercel.app (mirror on GitHub Pages: https://giodiri12.github.io/progetto-fintech-adfh/). The Treasury curve is updated automatically every day (see [How to update the data](#how-to-update-the-data)).
+**Live dashboard:** https://progetto-fintech-adfh.vercel.app The Treasury curve is updated automatically every day (see [How to update the data](#how-to-update-the-data)).
 
 ---
 
@@ -75,16 +75,11 @@ No build step, server or database is needed. `index.html`, `engine.js` and `data
 
 The page has no external dependencies: the charts are drawn directly in SVG, so the dashboard works offline as well. Only the update history and the button need an internet connection.
 
-**Online with GitHub Pages**
-1. Create a repository on GitHub and upload the whole folder to the root.
-2. Go to *Settings → Pages*.
-3. Under *Source* choose *Deploy from a branch*, then the `main` branch and the `/ (root)` folder. Save.
-4. After about a minute the dashboard is online at `https://<your-username>.github.io/<repository-name>/`.
-
-**Online with Vercel (alternative)**
+**Online (Vercel).** The public site is published by Vercel, which is connected to this GitHub repository. Every commit on `main` is deployed automatically, including the daily data updates, so GitHub holds the code and the data, and Vercel serves the site. Setup for a new copy of the project:
 1. Import the repository into Vercel.
 2. Leave *Framework Preset* set to *Other*.
 3. Leave *Build Command* and *Output Directory* empty, then click *Deploy*.
+4. Optional: add `GITHUB_DISPATCH_TOKEN` to activate the "Check for new data now" button (see below).
 
 ---
 
@@ -134,7 +129,7 @@ Nobody needs to download or type anything. A scheduled GitHub Actions job (`.git
    - the date is a business day, not in the future, with no duplicates;
    - no tenor moved more than 100 basis points since the previous day. A move above 50 basis points is saved but flagged in the log.
 5. Appends the new days. It then recomputes every value that depends on the curve date with the same engine as the page (`engine.js`): `summary.as_of`, `summary.headline`, `summary.key_numbers`, `curve.ref_dates`, `obligations.elapsed_years`, `obligations.sensitivity` and `meta.generated`.
-6. Runs the page validation on the result, writes `data.js` and commits it. GitHub Pages and Vercel then publish the new version automatically.
+6. Runs the page validation on the result, writes `data.js` and commits it. Vercel then publishes the new version automatically.
 
 **Fail closed.** If any check fails, `data.js` is not changed, the job fails and GitHub emails the repository owner. The page keeps showing the last valid curve, with the stale data warning once it is older than the limit. A run that finds no new data changes nothing.
 
@@ -156,7 +151,6 @@ Nobody needs to download or type anything. A scheduled GitHub Actions job (`.git
      - *Permissions*: *Actions: Read and write*, nothing else.
   2. On Vercel, add it as the environment variable `GITHUB_DISPATCH_TOKEN` for *Production* (*Project → Settings → Environment Variables*), then redeploy.
   3. Renew the token before it expires. Without a valid token the button says it is not active; the scheduled checks keep running.
-- On the GitHub Pages mirror the button calls the same function on the Vercel site.
 
 **Run it by hand** (optional): the button on the page, *Actions → Update Treasury curve → Run workflow* on GitHub, or locally:
 
