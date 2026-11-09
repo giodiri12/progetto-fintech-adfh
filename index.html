@@ -89,17 +89,21 @@ footer{text-align:center;color:var(--muted);padding:18px 0 28px}
     <div class="shocks" id="shocks"></div>
   </section>
 
+  <section class="card" id="updates"></section>
+
   <section class="card" id="about"></section>
 </div>
 <footer>Educational project. Not investment advice.</footer>
 
+<script src="engine.js"></script>
 <script src="data.js"></script>
 <script>
-/* Data loader: all data comes from data.js (window.DASHBOARD_DATA). Nothing is fetched from the network. */
+/* Data loader: all data comes from data.js (window.DASHBOARD_DATA), refreshed every day by scripts/update-curve.mjs. Nothing is fetched from the network. */
 function loadDashboardData() {
   return Promise.resolve(window.DASHBOARD_DATA);
 }
 loadDashboardData().then(function (d) {
+  if (!window.ADFH_ENGINE) throw new Error("Calculation engine missing (engine.js must be in the same folder as index.html).");
   if (!d || !d.summary || !d.data) throw new Error("Dashboard data missing or invalid");
   render(d.summary, d.data);
 }).catch(function (e) {
@@ -109,159 +113,16 @@ loadDashboardData().then(function (d) {
 });
 
 /* ---------------- helpers ---------------- */
+/* All formulas live in engine.js (window.ADFH_ENGINE), shared with the daily update script. */
+const E = window.ADFH_ENGINE;
+const fmt = E.fmt, sgn = E.sgn, dsgn = E.dsgn;
 const $ = function (id) { return document.getElementById(id); };
 function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined && text !== null) e.textContent = text; if (cls) e.className = cls; return e; }
 function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
-function fmt(x, d) { if (x === null || x === undefined || !isFinite(x)) return "n/a"; return x.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
-function sgn(x, d) { if (x === null || !isFinite(x)) return "n/a"; if (Number(Math.abs(x).toFixed(d)) === 0) x = 0; return (x < 0 ? "-" : "") + fmt(Math.abs(x), d); }
-function dsgn(x, d) { if (x === null || !isFinite(x)) return "n/a"; const neg = x < 0 && Math.round(Math.abs(x) * Math.pow(10, d)) > 0; return (neg ? "-$" : "$") + fmt(Math.abs(x), d); }
 function bizDays(fromIso, to) { let n = 0; const d = new Date(fromIso + "T00:00:00Z"); const end = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()); while (d.getTime() < end) { d.setUTCDate(d.getUTCDate() + 1); const w = d.getUTCDay(); if (w !== 0 && w !== 6 && d.getTime() <= end) n++; } return n; }
 function monthsBetween(iso, to) { const a = new Date(iso + "T00:00:00Z"); return (to.getUTCFullYear() - a.getUTCFullYear()) * 12 + (to.getUTCMonth() - a.getUTCMonth()); }
 
-/* ---------------- calculation engine ---------------- */
-function interp(yrs, ys, t) {
-  const n = yrs.length; if (t >= yrs[n - 1]) return ys[n - 1];
-  let i = 0; while (i + 1 < n && yrs[i + 1] <= t) i++;
-  return ys[i] + (ys[i + 1] - ys[i]) * (t - yrs[i]) / (yrs[i + 1] - yrs[i]);
-}
-function bootstrap(yrs, ys) {
-  const df = []; let s = 0;
-  for (let n = 1; n <= 60; n++) {
-    const t = n / 2, p = interp(yrs, ys, t); let d;
-    if (t <= 1) d = Math.pow(1 + p / 2, -2 * t); else { const c = p / 2; d = (1 - c * s) / (1 + c); }
-    df.push(d); s += d;
-  }
-  return df;
-}
-function zeros(df) { return df.map(function (d, n) { return 2 * (Math.pow(d, -1 / (n + 1)) - 1); }); }
-function dot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
-
 const App = { state: null, charts: {}, blocked: false };
-
-function validate(summary, data) {
-  const errs = [], c = data.curve, o = data.obligations;
-  if (!c || c.tenors.length !== 10) errs.push("Curve must have 10 tenors.");
-  const i = c ? c.dates.indexOf(summary.as_of) : -1;
-  if (i < 0) errs.push("The curve date " + summary.as_of + " is not in the saved curve data.");
-  else c.tenors.forEach(function (t) { const v = c.yields_pct[t][i]; if (typeof v !== "number" || !isFinite(v)) errs.push("Missing or non numeric yield for " + t + " on " + summary.as_of + "."); else if (v < -1 || v > 20) errs.push("Yield for " + t + " is outside the plausible range (-1 to 20 percent): " + v + ". Check that yields are in percent."); });
-  if (o.unit !== "USD millions") errs.push("Obligation unit must be USD millions, found: " + o.unit);
-  ["debt", "lease"].forEach(function (k) {
-    const v = o[k].values; if (v.length !== 6 || v.some(function (x) { return typeof x !== "number" || !isFinite(x) || x < 0; })) errs.push("Obligation values for " + k + " are missing or invalid.");
-    else if (Math.abs(v.reduce(function (a, b) { return a + b; }, 0) - o[k].control_total) > 0.5) errs.push("Obligation buckets for " + k + " do not add up to the filed total (wrong unit or typing error?). Sum " + fmt(v.reduce(function (a, b) { return a + b; }, 0), 1) + " versus " + fmt(o[k].control_total, 1) + " USD millions.");
-  });
-  const p = o.pension; if (p.values.length !== 6 || p.values.some(function (x) { return typeof x !== "number" || !isFinite(x) || x < 0; })) errs.push("Pension values are missing or invalid.");
-  else p.values.forEach(function (x, k) { if (Math.abs(x + p.medical_and_life_values[k] - p.companyfacts_total_values[k]) > 0.5) errs.push("Pension plan value for " + p.periods[k] + " plus medical and life does not equal the filed total (wrong unit?)."); });
-  return errs;
-}
-
-function curveYields(data, iso) { const c = data.curve, i = c.dates.indexOf(iso); if (i < 0) return null; const y = c.tenors.map(function (t) { return c.yields_pct[t][i]; }); return y.some(function (v) { return typeof v !== "number"; }) ? null : y.map(function (v) { return v / 100; }); }
-
-/* Schedule dating: the 10-K payment schedule is dated at the fiscal year end, the curve at a later date. Each mid year payment is shifted by the elapsed time e:
-   s = year - 0.5 - e. s <= 0: already due, dropped. 0 < s < 0.5: all at 0.5. Otherwise split linearly between the two neighbouring half year grid points. */
-function elapsedYears() { const a = new Date(App.summary.as_of + "T00:00:00Z"), f = new Date(App.data.obligations.fiscal_year_end + "T00:00:00Z"); return Math.max(0, (a - f) / 86400000 / 365.25); }
-function allocate(s) {
-  if (s <= 0) return [];
-  if (s < 0.5) return [[0, 1]];
-  const k = Math.floor(s / 0.5 + 1e-9);
-  if (k >= 60) return [[59, 1]];
-  const w = (s - k * 0.5) / 0.5;
-  return w < 1e-9 ? [[k - 1, 1]] : [[k - 1, 1 - w], [k, w]];
-}
-function schedule(st) {
-  const o = App.data.obligations, sp = o.spread, rows = [], e = elapsedYears();
-  const cf = new Array(60).fill(0);
-  for (let y = 1; y <= 30; y++) {
-    const d = !st.cats.debt ? 0 : (y <= 5 ? o.debt.values[y - 1] : (y <= sp.debt_and_lease_after_year5_until_year ? o.debt.values[5] / (sp.debt_and_lease_after_year5_until_year - 5) : 0));
-    const l = !st.cats.lease ? 0 : (y <= 5 ? o.lease.values[y - 1] : (y <= sp.debt_and_lease_after_year5_until_year ? o.lease.values[5] / (sp.debt_and_lease_after_year5_until_year - 5) : 0));
-    const p = !st.cats.pens ? 0 : (y <= 5 ? o.pension.values[y - 1] : (y <= sp.pension_after_year5_until_year ? o.pension.values[5] / (sp.pension_after_year5_until_year - 5) : 0));
-    const al = allocate(y - 0.5 - e); rows.push({ year: y, t: y - 0.5 - e, alloc: al, debt: d, lease: l, pens: p }); al.forEach(function (a) { cf[a[0]] += (d + l + p) * a[1]; });
-  }
-  return { rows: rows, cf: cf, e: e };
-}
-
-function compute(st) {
-  const d = App.data, yrs = d.curve.years, y0 = App.y0, bump = d.meta.bump_bp, b = bump / 1e4, lim = d.portfolio.bucket_limits_years;
-  const sch = schedule(st), DF = bootstrap(yrs, y0), z = zeros(DF);
-  const R = { sch: sch, DF: DF, z: z };
-  R.pv = dot(sch.cf, DF);
-  if (!(R.pv > 0)) { R.empty = true; return R; }
-  const dfUp = z.map(function (zz, n) { return Math.pow(1 + (zz + b) / 2, -(n + 1)); });
-  const bk = z.map(function (zz, n) { const t = (n + 1) / 2; return t <= lim[0] ? 0 : (t <= lim[1] ? 1 : 2); });
-  const dfB = [0, 1, 2].map(function (k) { return dfUp.map(function (x, n) { return bk[n] === k ? x : DF[n]; }); });
-  R.dv01 = (dot(sch.cf, dfUp) - R.pv) / bump;
-  R.bdv01 = dfB.map(function (a) { return (dot(sch.cf, a) - R.pv) / bump; });
-  R.dur = -R.dv01 / R.pv * 10000;
-  R.liquid = d.liquid_assets.cash_and_equivalents; R.cov = R.liquid / R.pv;
-  // instruments
-  const types = d.portfolio.instrument_types; R.inst = [];
-  for (let k = 0; k < 10; k++) {
-    const T = yrs[k], y = y0[k]; let I, B;
-    if (types[k] === "Bill") { I = (Math.pow(1 + (y + b) / 2, -2 * T) / Math.pow(1 + y / 2, -2 * T) - 1) / bump; B = [I, 0, 0]; }
-    else {
-      const N = Math.round(2 * T); const part = function (arr) { let s = 0; for (let i = 0; i < N; i++) s += arr[i] - DF[i]; return (y / 2 * s + arr[N - 1] - DF[N - 1]) / bump; };
-      I = part(dfUp); B = dfB.map(part);
-    }
-    R.inst.push({ T: T, y: y, bill: types[k] === "Bill", I: I, B: B, D: -I * 10000 });
-  }
-  // strategy weights
-  const w = {}; R.flags = [];
-  const D = R.inst.map(function (x) { return x.D; });
-  let lo = -1; for (let k = 0; k < 10; k++) if (D[k] <= R.dur) lo = k;
-  if (lo < 0 || lo >= 9) { R.flags.push("Bullet: obligations duration is outside the instrument range, bullet is not duration matched."); lo = Math.max(0, Math.min(8, lo)); }
-  const wl = (D[lo + 1] - R.dur) / (D[lo + 1] - D[lo]); w.bullet = new Array(10).fill(0); w.bullet[lo] = wl; w.bullet[lo + 1] = 1 - wl; R.bulletPair = [lo, lo + 1];
-  const w30 = (R.dur - D[3]) / (D[9] - D[3]); w.barbell = new Array(10).fill(0); w.barbell[3] = 1 - w30; w.barbell[9] = w30;
-  if (w30 < 0 || w30 > 1) R.flags.push("Barbell: weights fall outside 0 to 100 percent, barbell cannot match the obligations duration.");
-  const nb = types.filter(function (t) { return t === "Par bond"; }).length; w.ladder = types.map(function (t) { return t === "Par bond" ? 1 / nb : 0; });
-  const sumC = st.custom.reduce(function (a, b2) { return a + b2; }, 0);
-  w.custom = Math.abs(sumC - 100) < 1e-9 ? st.custom.map(function (x) { return x / 100; }) : null;
-  R.w = w;
-  R.strat = {};
-  ["cfm", "bullet", "barbell", "ladder", "custom"].forEach(function (s) {
-    if (s === "cfm") { R.strat[s] = { dv01: R.dv01, b: R.bdv01.slice(), cost: R.pv }; }
-    else if (!w[s]) { R.strat[s] = null; return; }
-    else { const ww = w[s]; R.strat[s] = { dv01: R.pv * dot(ww, R.inst.map(function (x) { return x.I; })), b: [0, 1, 2].map(function (k) { return R.pv * dot(ww, R.inst.map(function (x) { return x.B[k]; })); }), cost: R.pv }; }
-    const S = R.strat[s]; S.gap = S.dv01 - R.dv01; S.bgap = S.b.map(function (x, k) { return x - R.bdv01[k]; });
-  });
-  return R;
-}
-
-function scenarioShocks(sc) {
-  const d = App.data, yrs = d.curve.years, c = d.curve;
-  if (sc.kind === "parallel") return yrs.map(function () { return sc.shock_bp; });
-  if (sc.kind === "steepener" || sc.kind === "flattener") {
-    const f = function (T) { const x = Math.max(sc.short_tenor_years, Math.min(sc.long_tenor_years, T)); return sc.short_bp + (sc.long_bp - sc.short_bp) * (x - sc.short_tenor_years) / (sc.long_tenor_years - sc.short_tenor_years); };
-    return yrs.map(function (T) { return sc.kind === "steepener" ? f(T) : -f(T); });
-  }
-  if (sc.kind === "replay") {
-    const i0 = c.dates.indexOf(sc.start), i1 = c.dates.indexOf(sc.end); if (i0 < 0 || i1 < 0) return null;
-    const out = []; for (let k = 0; k < 10; k++) { const a = c.yields_pct[c.tenors[k]][i0], b2 = c.yields_pct[c.tenors[k]][i1]; if (typeof a !== "number" || typeof b2 !== "number") return null; out.push((b2 - a) * 100); }
-    return out;
-  }
-  if (sc.kind === "custom") return sc.shocks.some(function (x) { return typeof x !== "number" || !isFinite(x); }) ? null : sc.shocks.slice();
-  return null;
-}
-
-function runScenario(R, st, sc) {
-  const d = App.data, yrs = d.curve.years, shocks = scenarioShocks(sc);
-  const res = { name: sc.name, type: sc.type, shocks: shocks };
-  if (!shocks) { res.invalid = true; return res; }
-  const ys = App.y0.map(function (y, k) { return y + shocks[k] / 1e4; });
-  res.negative = Math.min.apply(null, ys) < 0;
-  const DFs = bootstrap(yrs, ys);
-  res.dObl = dot(R.sch.cf, DFs) - R.pv;
-  if (sc.kind === "parallel") res.firstOrder = R.dv01 * sc.shock_bp;
-  const instVal = R.inst.map(function (x, k) {
-    if (x.bill) return Math.pow(1 + ys[k] / 2, -2 * x.T) / Math.pow(1 + x.y / 2, -2 * x.T);
-    const N = Math.round(2 * x.T); let s = 0; for (let i = 0; i < N; i++) s += DFs[i]; return x.y / 2 * s + DFs[N - 1];
-  });
-  res.instVal = instVal;
-  ["cfm", "bullet", "barbell", "ladder", "custom"].forEach(function (s) {
-    if (s === "cfm") res[s] = { d: res.dObl, gap: 0 };
-    else if (!R.w[s]) res[s] = null;
-    else { const v = R.pv * dot(R.w[s], instVal); res[s] = { d: v - R.pv, gap: v - R.pv - res.dObl }; }
-  });
-  return res;
-}
 
 /* ---------------- rendering ---------------- */
 const STRAT = [["cfm", "Cash flow matching (theoretical benchmark)"], ["bullet", "Bullet"], ["barbell", "Barbell"], ["ladder", "Ladder"], ["custom", "Custom"]];
@@ -281,17 +142,12 @@ function setChart(id, cfg) {
 }
 const PAL = ["#1f5fa8", "#d9731a", "#1f8a83", "#7b4fa3", "#7a8594"];
 
-function currentHeadline(st, R) {
-  const S = R.strat[st.strategy];
-  const gap = S ? S.gap : null;
-  return "Securing " + (st.cats.debt && st.cats.lease && st.cats.pens ? "the listed" : "the selected") + " obligations costs $" + fmt(R.pv / 1000, 1) + "bn today; liquid assets cover " + fmt(R.cov * 100, 1) + "%. " + STRAT_SHORT[st.strategy] + " portfolio gap: " + (S ? dsgn(gap, 1) + "m per bp." : "n/a (custom weights must sum to 100%).");
-}
 function isDefault(st) { const dflt = App.data.portfolio.default_strategy; return st.cats.debt && st.cats.lease && st.cats.pens && st.strategy === dflt; }
 
 function update() {
   const st = App.state, d = App.data, s = App.summary;
   if (App.blocked) return;
-  const R = compute(st);
+  const R = E.compute(d, s.as_of, App.y0, st);
   const kp = $("kpis"); clear(kp);
   const alerts = $("alerts"); Array.prototype.slice.call(alerts.querySelectorAll(".dyn")).forEach(function (n) { alerts.removeChild(n); });
   if (R.empty) {
@@ -304,11 +160,12 @@ function update() {
   const S = R.strat[st.strategy];
   // headline
   const hl = $("headline"); clear(hl);
-  if (isDefault(st)) { hl.appendChild(document.createTextNode(s.headline)); hl.appendChild(el("span", "Saved headline for the default view (all categories, " + STRAT_SHORT[d.portfolio.default_strategy] + "). Gap: when all rates rise 1 bp the portfolio loses (negative) or gains (positive) this much more than the obligations.", "badge")); }
-  else { hl.appendChild(document.createTextNode(currentHeadline(st, R))); hl.appendChild(el("span", "Your selection (the saved default headline is: " + s.headline + ")", "badge")); }
+  hl.appendChild(document.createTextNode(E.headline(R, st)));
+  const gapNote = "Gap: when all rates rise 1 bp the portfolio loses (negative) or gains (positive) this much more than the obligations.";
+  hl.appendChild(el("span", (isDefault(st) ? "Default view (all categories, " + STRAT_SHORT[d.portfolio.default_strategy] + "), curve of " + s.as_of + ". " : "Your selection, curve of " + s.as_of + ". ") + gapNote, "badge"));
   // KPIs
-  const pvM = (function () { const st2 = st; const sc = schedule(st2); return dot(sc.cf, bootstrap(d.curve.years, App.yM)); })();
-  const tr = function (a, b2) { return a > b2 * 1.005 ? "up" : (a < b2 * 0.995 ? "down" : "flat"); };
+  const pvM = E.dot(E.schedule(d, s.as_of, st.cats).cf, E.bootstrap(d.curve.years, App.yM));
+  const tr = E.trend;
   const K = [
     ["Cost to secure obligations", "$" + fmt(R.pv / 1000, 1) + "bn", "USD " + fmt(R.pv, 1) + " million; " + tr(R.pv, pvM) + " versus " + d.curve.ref_dates.month_earlier],
     ["Coverage ratio", fmt(R.cov * 100, 1) + "%", "Liquid assets USD " + fmt(R.liquid, 1) + " million (cash and equivalents); " + tr(R.cov, R.liquid / pvM) + " versus " + d.curve.ref_dates.month_earlier],
@@ -331,7 +188,7 @@ function update() {
   const yrsL = R.sch.rows.map(function (r) { return String(r.year); });
   const pvc = function (key) { return R.sch.rows.map(function (r) { return r[key] * r.alloc.reduce(function (a, w) { return a + w[1] * R.DF[w[0]]; }, 0); }); };
   const tot = R.sch.rows.map(function (r) { return r.debt + r.lease + r.pens; });
-  $("v2note").textContent = "USD millions. Bars: present value by category (nominal payment times discount factor). Line: nominal payments. Payments fall in the middle of each year, counted from the curve date (the schedule is moved forward by " + fmt(elapsedYears(), 2) + " years; payments already due, mostly in year 1, have no present value); amounts after year 5 are spread evenly (debt and leases to year " + d.obligations.spread.debt_and_lease_after_year5_until_year + ", pensions to year " + d.obligations.spread.pension_after_year5_until_year + "). This spreading rule is an assumption.";
+  $("v2note").textContent = "USD millions. Bars: present value by category (nominal payment times discount factor). Line: nominal payments. Payments fall in the middle of each year, counted from the curve date (the schedule is moved forward by " + fmt(R.sch.e, 2) + " years; payments already due, mostly in year 1, have no present value); amounts after year 5 are spread evenly (debt and leases to year " + d.obligations.spread.debt_and_lease_after_year5_until_year + ", pensions to year " + d.obligations.spread.pension_after_year5_until_year + "). This spreading rule is an assumption.";
   const ds = []; CAT.forEach(function (cat, k) { if (st.cats[cat[0]]) ds.push({ type: "bar", label: "PV " + cat[1], data: pvc(cat[0]), backgroundColor: PAL[k], stack: "pv", order: 2 }); });
   ds.push({ type: "line", label: "Nominal total", data: tot, borderColor: PAL[4], backgroundColor: PAL[4], borderWidth: 2, pointRadius: 2, order: 1 });
   setChart("c2", { data: { labels: yrsL, datasets: ds }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, title: { display: true, text: "Year of the 10-K payment schedule" } }, y: { stacked: true, beginAtZero: true, title: { display: true, text: "USD millions" } } }, plugins: { legend: { position: "bottom" } } } });
@@ -349,7 +206,7 @@ function update() {
   // View 4
   const out = [];
   const scs = d.scenarios.concat([{ id: "custom", name: "Custom (your shocks)", kind: "custom", shocks: st.shocks, type: "user input" }]);
-  scs.forEach(function (sc) { out.push(runScenario(R, st, sc)); });
+  scs.forEach(function (sc) { out.push(E.runScenario(d, App.y0, R, sc)); });
   App.scen = out;
   $("v4note").textContent = "Change in value in USD millions under a shocked curve (full repricing: the shocked par curve is bootstrapped again). Gap = portfolio change minus obligations change (a negative gap means the portfolio is worth less relative to the obligations in that scenario). Obligations change is the change in the cost to secure: positive means securing the payments became more expensive. First order = obligations DV01 times the shock, shown for parallel scenarios; the difference to full repricing is convexity. Predefined shocks are model assumptions; replays are the actual Treasury par yield changes between two dates applied to today's curve. Strategy shown: " + STRAT_SHORT[st.strategy] + ".";
   const rows4 = out.map(function (r, k) {
@@ -377,7 +234,35 @@ function buildControls() {
   const sh = $("shocks"); d.curve.tenors.forEach(function (t, k) { const w = el("div"); w.appendChild(el("label", t + " (bp)")); const i = el("input"); i.type = "number"; i.step = "1"; i.value = st.shocks[k]; i.setAttribute("aria-label", "Custom shock in basis points for " + t); i.addEventListener("input", function () { st.shocks[k] = i.value === "" ? NaN : Number(i.value); update(); }); w.appendChild(i); sh.appendChild(w); });
 }
 
-function buildAbout(summary, data) {
+/* "Data updates" section: when the curve was last refreshed and what each automatic update changed (data.meta.update_log, newest first). */
+function localTime(iso) { const t = new Date(iso); return isNaN(t) ? "n/a" : t.toLocaleString("en-GB", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }); }
+function utcTime(iso) { return typeof iso === "string" ? iso.slice(0, 16).replace("T", " ") + " UTC" : "n/a"; }
+function buildUpdates(summary, data) {
+  const u = $("updates"), m = data.meta, log = m.update_log || [], au = m.auto_update || {};
+  u.appendChild(el("h2", "Data updates"));
+  const P = function (t, cls) { u.appendChild(el("p", t, cls)); };
+  const last = log[0];
+  const p = el("p"); p.appendChild(document.createTextNode("Latest curve date: ")); p.appendChild(el("b", summary.as_of));
+  p.appendChild(document.createTextNode(". Last automatic update: ")); p.appendChild(el("b", last ? localTime(last.time_utc) : "none yet"));
+  if (last) p.appendChild(document.createTextNode(" (" + utcTime(last.time_utc) + ")."));
+  u.appendChild(p);
+  P("The Treasury par yield curve is downloaded automatically every day, with no manual step, from the Treasury's official CSV and XML data feeds. " +
+    "A new day is saved only if both feeds agree on every value and all checks pass (10 tenors present, numeric, in percent, plausible range, business day, no duplicates, no extreme daily jump). " +
+    "The last 10 stored days are compared with the feeds at every run; corrections published by the Treasury are applied and listed below. " +
+    "If any check fails, nothing is changed: the page keeps the last valid curve and shows the stale data warning.", "small");
+  if (au.schedule_utc) P("The Treasury normally publishes the curve by about 6 PM New York time on business days. Scheduled checks: " + au.schedule_utc.join(", ") + " UTC" + (au.schedule_note ? " (" + au.schedule_note + ")" : "") + ". A check that finds no new data changes nothing and is not listed.", "small");
+  P("The company's obligations come from its annual 10-K filing and are updated manually once a year.", "small");
+  if (!log.length) { P("No automatic update has run yet."); return; }
+  u.appendChild(el("h3", "Recent updates (newest first)"));
+  const corr = function (c) { return c.date + " " + c.tenor + ": " + fmt(c.old, 2) + " → " + fmt(c.new, 2); };
+  const w = el("div", null, "tablewrap");
+  w.appendChild(table(["Update time (your time zone)", "Update time (UTC)", "Curve dates added", "Corrections applied", "Checks"], log.slice(0, 15).map(function (r) {
+    return [localTime(r.time_utc), utcTime(r.time_utc), r.curve_dates_added.length ? r.curve_dates_added.join(", ") : "none", r.corrections.length ? r.corrections.map(corr).join("; ") : "none", r.checks];
+  })));
+  u.appendChild(w);
+}
+
+function buildAbout(summary, data, valid) {
   const a = $("about"); const o = data.obligations, sp = o.spread, m = data.meta;
   a.appendChild(el("h2", "About this dashboard"));
   const P = function (t) { a.appendChild(el("p", t)); };
@@ -400,12 +285,12 @@ function buildAbout(summary, data) {
   const as = el("ul");
   ["After year 5, debt and lease amounts are spread evenly over years 6 to " + sp.debt_and_lease_after_year5_until_year + "; pension benefits after year 5 are spread evenly over years 6 to " + sp.pension_after_year5_until_year + ". This spreading rule has the largest effect on the result.",
    "Payments fall in the middle of each year; bills up to one year are zero coupon yields.",
-   "Dates: the payment schedule is as of " + o.fiscal_year_end + " and the curve is as of " + summary.as_of + ". The model rolls the schedule forward by " + fmt(o.elapsed_years, 2) + " years. This is an approximation: payments of the current year are treated as paid at the middle of that year, so any amount still due before year end is dropped. The last row of the sensitivity table shows the old method without roll forward.",
+   "Dates: the payment schedule is as of " + o.fiscal_year_end + " and the curve is as of " + summary.as_of + ". The model rolls the schedule forward by " + fmt(E.elapsedYears(summary.as_of, o.fiscal_year_end), 2) + " years. This is an approximation: payments of the current year are treated as paid at the middle of that year, so any amount still due before year end is dropped. The last row of the sensitivity table shows the old method without roll forward.",
    "Pensions: pension plans only, from the filing's benefit payment table. " + o.notes.join(" "),
    "Liquid assets: " + data.liquid_assets.note,
    "Scenario shocks and replay windows are model assumptions; each is labelled in View 4. The one month comparison uses the nearest stored curve date on or before one month earlier."].forEach(function (t) { as.appendChild(el("li", t)); });
   a.appendChild(as);
-  if (o.sensitivity) { a.appendChild(el("h3", "How much the assumptions matter")); P("Cost to secure (USD millions) and coverage ratio when one assumption changes, on the curve of " + summary.as_of + ". The base case is the dashboard default."); var sw = document.createElement("div"); sw.className = "tablewrap"; sw.appendChild(table(["Assumption change", "Cost to secure", "Change", "Coverage"], o.sensitivity.map(function (r) { return [r.label, fmt(r.cost, 1), (r.change_pct > 0 ? "+" : "") + fmt(r.change_pct, 1) + "%", fmt(r.coverage * 100, 1) + "%"]; }))); a.appendChild(sw); }
+  if (valid) { a.appendChild(el("h3", "How much the assumptions matter")); P("Cost to secure (USD millions) and coverage ratio when one assumption changes, on the curve of " + summary.as_of + " (recalculated in the page). The base case is the dashboard default."); var sw = document.createElement("div"); sw.className = "tablewrap"; sw.appendChild(table(["Assumption change", "Cost to secure", "Change", "Coverage"], E.sensitivity(data, summary.as_of, E.curveYields(data, summary.as_of)).map(function (r) { return [r.label, fmt(r.cost, 1), (r.change_pct > 0 ? "+" : "") + fmt(r.change_pct, 1) + "%", fmt(r.coverage * 100, 1) + "%"]; }))); a.appendChild(sw); }
   a.appendChild(el("h3", "Limitations: when this can mislead"));
   const li2 = el("ul");
   ["The bootstrap approximates, but does not reproduce, the Treasury's own curve method.",
@@ -423,9 +308,11 @@ function render(summary, data) {
   App.summary = summary; App.data = data;
   $("title").textContent = summary.title; $("question").textContent = summary.question;
   const o = data.obligations, now = new Date();
-  const dates = $("dates"); [["Curve as of", summary.as_of], ["Obligations: fiscal year ended", o.fiscal_year_end + " (" + o.company + ")"], ["Data file saved", data.meta.generated]].forEach(function (p) { const s = el("span"); s.appendChild(document.createTextNode(p[0] + " ")); s.appendChild(el("b", p[1])); dates.appendChild(s); });
-  const errs = validate(summary, data);
-  buildAbout(summary, data);
+  const lastLog = (data.meta.update_log || [])[0];
+  const dates = $("dates"); [["Curve as of", summary.as_of], ["Obligations: fiscal year ended", o.fiscal_year_end + " (" + o.company + ")"], ["Data file saved", data.meta.generated], ["Last automatic update", lastLog ? localTime(lastLog.time_utc) : "none yet"]].forEach(function (p) { const s = el("span"); s.appendChild(document.createTextNode(p[0] + " ")); s.appendChild(el("b", p[1])); dates.appendChild(s); });
+  const errs = E.validate(summary, data);
+  buildUpdates(summary, data);
+  buildAbout(summary, data, errs.length === 0);
   if (errs.length) {
     App.blocked = true;
     errs.forEach(function (e) { $("alerts").appendChild(el("div", "Cannot compute the affected outputs: " + e, "err")); });
@@ -435,7 +322,7 @@ function render(summary, data) {
   const bd = bizDays(summary.as_of, now), mo = monthsBetween(o.fiscal_year_end, now);
   if (bd > data.meta.stale_rules.curve_business_days) $("alerts").appendChild(el("div", "Stale curve: the Treasury curve is " + bd + " business days old (limit " + data.meta.stale_rules.curve_business_days + ").", "warn"));
   if (mo > data.meta.stale_rules.fiscal_year_months) $("alerts").appendChild(el("div", "Stale obligations: the fiscal year end is " + mo + " months old (limit " + data.meta.stale_rules.fiscal_year_months + ").", "warn"));
-  App.y0 = curveYields(data, summary.as_of); App.yM = curveYields(data, data.curve.ref_dates.month_earlier);
+  App.y0 = E.curveYields(data, summary.as_of); App.yM = E.curveYields(data, data.curve.ref_dates.month_earlier);
   if (!App.yM) { App.yM = App.y0; $("alerts").appendChild(el("div", "The one month earlier curve is missing a value; trend labels compare with today.", "warn")); }
   App.state = { cats: { debt: true, lease: true, pens: true }, strategy: data.portfolio.default_strategy, custom: data.portfolio.custom_default_weights_pct.slice(), shocks: data.curve.tenors.map(function () { return 0; }) };
   buildControls();

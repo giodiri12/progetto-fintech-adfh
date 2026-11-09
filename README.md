@@ -51,12 +51,15 @@ At the bottom of the page the **About** section contains:
 
 ```
 progetto-fintech-adfh/
-├── index.html   the dashboard: layout, styling and calculation engine (single file)
-├── data.js      all saved data: curve, obligations, scenarios, summary texts
-└── README.md    this file
+├── index.html                          the dashboard: layout, styling and rendering
+├── engine.js                           calculation engine, shared by the page and the update script
+├── data.js                             all saved data: curve, obligations, scenarios, summary texts, update log
+├── scripts/update-curve.mjs            daily download, verification and update of the Treasury curve
+├── .github/workflows/update-curve.yml  schedule that runs the update script every day (GitHub Actions)
+└── README.md                           this file
 ```
 
-No build step, server, database or API keys are needed. `index.html` and `data.js` must be in the same folder.
+No build step, server, database or API keys are needed. `index.html`, `engine.js` and `data.js` must be in the same folder.
 
 ---
 
@@ -67,7 +70,7 @@ No build step, server, database or API keys are needed. `index.html` and `data.j
 The charts use Chart.js 4.4.1 loaded from `cdnjs.cloudflare.com`, so an internet connection is needed to see them. Without a connection the page shows a warning, opens the tables, and all numbers remain visible.
 
 **Online with GitHub Pages**
-1. Create a repository on GitHub and upload the three files to the root, or upload the whole folder.
+1. Create a repository on GitHub and upload the whole folder to the root.
 2. Go to *Settings → Pages*.
 3. Under *Source* choose *Deploy from a branch*, then the `main` branch and the `/ (root)` folder. Save.
 4. After about a minute the dashboard is online at `https://<your-username>.github.io/<repository-name>/`.
@@ -113,27 +116,43 @@ Reference: Tuckman, B. and Serrat, A., *Fixed Income Securities: Tools for Today
 
 All data lives in `data.js`, in a single statement: `window.DASHBOARD_DATA = { ...valid JSON... };`. Missing values are written as `null`, never `0`. The page does the calculations, so updating only requires changing the data.
 
-**New curve day** (from the Treasury page listed above)
-1. Append the date to the end of `data.curve.dates` in `YYYY-MM-DD` format.
-2. Append the yield, in percent, to the end of each of the ten lists in `data.curve.yields_pct`, in the same order.
-3. Update `data.curve.ref_dates`:
-   - `month_earlier` and `year_earlier` must be dates already present in `dates`, roughly one month and one year earlier.
-4. Update `summary.as_of` with the new date. In `summary.key_numbers` correct the values and dates.
-5. Update `summary.headline`, i.e. the text shown in the default view (all categories, Ladder strategy).
-   - Use the pattern `Securing the listed obligations costs $X.Xbn today; liquid assets cover Y.Y%. Ladder portfolio gap: $Z.Zm per bp.` (maximum 140 characters).
-   - Take the numbers from the four indicators: the page always recalculates them from the data.
-6. Update `data.meta.generated` and the access date in `data.meta.sources`.
+### Treasury curve: automatic, every day
 
-**New 10-K filing**
+Nobody needs to download or type anything. A scheduled GitHub Actions job (`.github/workflows/update-curve.yml`) runs `scripts/update-curve.mjs` every day. The script:
+
+1. Downloads the Daily Treasury Par Yield Curve Rates from the Treasury's two official machine readable feeds, **CSV and XML** (no web page scraping, no spreadsheets).
+2. Checks that the **two feeds agree exactly** on every value it uses.
+3. Re-checks the **last 10 stored days**. If the Treasury has published a correction, the script applies it and records it in the update log and the commit message. A correction larger than 50 basis points stops the update.
+4. Checks every new day:
+   - all 10 tenors are present and numeric, in percent, between -1 and 20;
+   - the date is a business day, not in the future, with no duplicates;
+   - no tenor moved more than 100 basis points since the previous day. A move above 50 basis points is saved but flagged in the log.
+5. Appends the new days. It then recomputes every value that depends on the curve date with the same engine as the page (`engine.js`): `summary.as_of`, `summary.headline`, `summary.key_numbers`, `curve.ref_dates`, `obligations.elapsed_years`, `obligations.sensitivity` and `meta.generated`.
+6. Runs the page validation on the result, writes `data.js` and commits it. GitHub Pages and Vercel then publish the new version automatically.
+
+**Fail closed.** If any check fails, `data.js` is not changed, the job fails and GitHub emails the repository owner. The page keeps showing the last valid curve, with the stale data warning once it is older than the limit. A run that finds no new data changes nothing.
+
+**Schedule.** The Treasury normally publishes the curve by about 6 PM New York time on business days, which is 22:00–23:00 UTC. The job runs at 23:10, 00:40 and 04:10 UTC (07:10, 08:40 and 12:10 in Singapore). The later runs catch late publications. GitHub may start a scheduled run a few minutes late.
+
+**Where to see what happened**
+- On the page: the *Data updates* section shows the time of the last update and the recent updates (dates added, corrections, checks).
+- On GitHub: the *Actions* tab shows every run with its log, and each update is a commit by `github-actions[bot]`.
+
+**Run it by hand** (optional): *Actions → Update Treasury curve → Run workflow*, or locally:
+
+```
+node scripts/update-curve.mjs --dry-run   # download and check, write nothing
+node scripts/update-curve.mjs             # download, check and update data.js
+```
+
+### Company obligations: manual, once a year (new 10-K filing)
 
 In `data.obligations` update:
 - `fiscal_year_end`, `accession_number`, `filed`;
 - the six values of `debt.values` and `lease.values`, with their `control_total`;
 - the `pension` values.
 
-The page checks that the totals add up. If a value is missing or has the wrong unit, the page blocks the results and reports it.
-
-**Precomputed values.** The sensitivity table (`obligations.sensitivity`) and `elapsed_years` refer to the saved date. After an update they must be recalculated; otherwise they should be read as referring to the previous date.
+Then run `node scripts/update-curve.mjs --recompute` to recompute the headline, key numbers and sensitivity table, and commit `data.js`. The page checks that the totals add up. If a value is missing or has the wrong unit, the page blocks the results and reports it.
 
 **Stale data rule.** The page warns when:
 - the curve is more than 3 business days old;
