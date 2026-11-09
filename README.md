@@ -14,33 +14,36 @@ The demo case uses the obligations published by Northrop Grumman Corp (10-K for 
 
 ## What it shows
 
-**At the top**
-- Curve date, obligations date and data save date, with an automatic warning when the data is too old.
-- The main message: cost to secure the obligations, coverage ratio and sensitivity gap of the selected portfolio.
-- Four indicators:
-  - cost to secure the obligations;
-  - coverage ratio (liquid assets / cost);
-  - obligations DV01;
-  - DV01 gap of the selected portfolio.
+The page is a single-screen "bento" dashboard in a dark theme, with a light theme one click away (the choice is remembered on the device). Explanations stay hidden behind the **i** buttons, and every chart has a **Data** button that opens its table.
 
-**The four views**
-1. Today's yield curve compared with one month and one year earlier.
-2. Obligation schedule by year: nominal value and present value, split by category (debt, leases, pensions).
-3. Rate sensitivity (DV01) by maturity bucket (0–2, 2–7, 7–30 years): obligations versus the selected portfolio.
-4. Scenarios, with a full revaluation for each one:
+**First row**
+- **Cost to secure the obligations:** the main figure, its change against one month earlier, the summary sentence, and the daily change of the cost over the last 30 curve days.
+- **Coverage ratio** (liquid assets / cost), shown as a gauge.
+- **Treasury data feed:**
+  - the latest curve date, the last and next automatic check, and the "Check for new data now" button;
+  - *Update history* opens the status of the last 10 Treasury business days and the recent checks.
+
+**Controls**
+- Obligation categories, switched on or off as chips.
+- Portfolio strategy: cash flow matching, bullet, barbell, ladder, or custom weights set with sliders.
+
+**Risk and charts**
+1. **Obligations DV01**, with its split by maturity bucket.
+2. **DV01 gap of the selected portfolio**, with a matched / small / large mismatch badge.
+3. **Treasury par yield curve:** today against one month and one year earlier, with the 10-year yield and the 30y − 2y spread.
+4. **Rate sensitivity by maturity bucket** (0–2, 2–7, 7–30 years): obligations against the selected portfolio.
+5. **Obligation schedule by year:** present value by category (debt, leases, pensions) and nominal payments.
+6. **Scenarios**, each with a full revaluation:
    - parallel shifts of ±100 basis points;
    - curve steepening and flattening;
    - replays of the actual moves of autumn 2008, March 2020 and 2022;
-   - a custom shock.
+   - a custom shock per maturity.
 
-**Interactions**
-- Switch obligation categories on or off.
-- Choose the portfolio strategy: cash flow matching, bullet, barbell, ladder, or custom weights set with sliders.
-- Enter a shock for each maturity.
+**Colours carry meaning.** Green means better for the company: cheaper obligations, portfolio gains, a surplus. Red means worse: costlier obligations, losses, a shortfall. Amber means a caution. These colours always come with a sign, an arrow or a label. Categories use a separate colour-blind-safe palette (blue, orange, aqua), and yields are shown in neutral colours because a rise in rates is neither good nor bad in itself.
 
-Every number, chart and table recalculates instantly in the browser.
+Every number, chart and table recalculates instantly in the browser. Charts show values on hover, and keyboard users can step through them with the arrow keys.
 
-At the bottom of the page the **About** section contains:
+The **Methodology** section at the bottom (also reachable from the top bar) contains:
 - method;
 - sources;
 - main assumptions;
@@ -53,7 +56,7 @@ At the bottom of the page the **About** section contains:
 
 ```
 progetto-fintech-adfh/
-├── index.html                          the dashboard: layout, styling and rendering
+├── index.html                          the dashboard: layout, styling, SVG charts and rendering
 ├── engine.js                           calculation engine, shared by the page and the update script
 ├── data.js                             all saved data: curve, obligations, scenarios, summary texts, update log
 ├── scripts/update-curve.mjs            daily download, verification and update of the Treasury curve
@@ -70,7 +73,7 @@ No build step, server or database is needed. `index.html`, `engine.js` and `data
 
 **Locally.** Double-click `index.html`. It opens in any recent browser: Safari, Chrome, Edge or Firefox.
 
-The charts use Chart.js 4.4.1 loaded from `cdnjs.cloudflare.com`, so an internet connection is needed to see them. Without a connection the page shows a warning, opens the tables, and all numbers remain visible.
+The page has no external dependencies: the charts are drawn directly in SVG, so the dashboard works offline as well. Only the update history and the button need an internet connection.
 
 **Online with GitHub Pages**
 1. Create a repository on GitHub and upload the whole folder to the root.

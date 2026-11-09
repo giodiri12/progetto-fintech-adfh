@@ -1,120 +1,440 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Progetto Fintech ADFH</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<meta name="description" content="Cost to secure contractual payment obligations with US Treasuries: coverage, DV01, portfolio gaps and yield curve scenarios, updated every day.">
+<script>
+/* Theme before first paint: dark by default, the viewer's choice is remembered on this device. */
+(function () { var t = "dark"; try { t = localStorage.getItem("adfh-theme") || "dark"; } catch (e) {} document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark"); })();
+</script>
 <style>
-:root{--ink:#1d2733;--muted:#5b6776;--line:#d5dbe3;--bg:#f5f7fa;--card:#fff;--blue:#1f5fa8;--orange:#d9731a;--teal:#1f8a83;--purple:#7b4fa3;--grey:#7a8594}
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.45}
-.wrap{max-width:1120px;margin:0 auto;padding:16px}
-h1{font-size:1.6rem;margin:0 0 4px}h2{font-size:1.1rem;margin:0 0 8px}h3{font-size:1rem;margin:12px 0 4px}
-.sub{color:var(--muted);margin:0 0 10px}
-.dates{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.9rem;color:var(--muted);margin:6px 0}
-.dates b{color:var(--ink)}
-.headline{font-size:1.25rem;font-weight:600;background:var(--card);border-left:6px solid var(--blue);padding:12px 14px;border-radius:6px;margin:12px 0}
-.badge{font-size:.8rem;font-weight:400;color:var(--muted);display:block}
-.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin:12px 0}
-.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
-.kpi .l{font-size:.85rem;color:var(--muted)}.kpi .v{font-size:1.6rem;font-weight:700;margin:2px 0}.kpi .s{font-size:.8rem;color:var(--muted)}
-.controls{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:flex-start}
-.controls fieldset{border:1px solid var(--line);border-radius:6px;padding:8px 12px}
-.controls legend{font-size:.85rem;color:var(--muted);padding:0 4px}
-label{margin-right:12px;display:inline-block}.controls fieldset{min-width:0;max-width:100%}
-.chartbox{position:relative;height:320px}
-.warn{background:#fff4e0;border:1px solid #e8b76a;border-radius:6px;padding:8px 12px;margin:8px 0;font-size:.9rem}
-.err{background:#ffe9e9;border:2px solid #b33;border-radius:6px;padding:10px 12px;margin:8px 0;font-weight:600}
-.tablewrap{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:.88rem}
-th,td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:right;white-space:nowrap}
-th:first-child,td:first-child{text-align:left;white-space:normal;min-width:8em}th{background:#eef2f7}
-.sliders{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 16px;margin:8px 0}
-.sliders div{display:flex;align-items:center;gap:6px}.sliders input[type=range]{flex:1;min-width:70px}
-.shocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px 10px;margin:8px 0}
-.shocks input{width:100%}
-button{font:inherit;padding:4px 10px;border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:5px;cursor:pointer}
-details summary{cursor:pointer;color:var(--blue);margin:6px 0}
-.small{font-size:.85rem;color:var(--muted)}
-.upd-banner{border-radius:6px;padding:10px 12px;margin:6px 0 10px;border:1px solid var(--line)}.upd-banner .upd-head{font-weight:600;margin-bottom:2px}
-.upd-ok{background:#eaf6ee;border-color:#9fd0ae}.upd-pending{background:#fff4e0;border-color:#e8b76a}.upd-bad{background:#ffe9e9;border-color:#d99}
-.upd-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:6px 0}.upd-bar button{font-weight:600;padding:6px 14px}button:disabled{opacity:.6;cursor:wait}
-.st{font-weight:600}.st-ok{color:#1d7a3a}.st-pending{color:#9a6200}.st-bad{color:#b33}.st-muted{color:var(--muted)}
-.upd-table td{white-space:normal}.upd-table td:nth-child(2){white-space:nowrap}
-footer{text-align:center;color:var(--muted);padding:18px 0 28px}
-#about p,#about li{max-width:880px}
-@media(max-width:820px){.grid4{grid-template-columns:repeat(2,1fr)}h1{font-size:1.35rem}.chartbox{height:280px}}
-@media(max-width:480px){.grid4{grid-template-columns:1fr}.wrap{padding:12px}th{white-space:normal}th,td{padding:4px 5px}}
+/* ---------- design tokens (dark default, light override) ---------- */
+:root {
+  color-scheme: dark;
+  --bg: #0a0c10; --card: #13161c; --card-2: #191d25; --hover: rgba(255,255,255,.04);
+  --border: rgba(255,255,255,.08); --border-2: rgba(255,255,255,.14);
+  --fg: #eef0f3; --fg-2: #b6bcc7; --muted: #8a919e;
+  --grid: #222731; --axis: #343b47;
+  --accent: #3987e5; --accent-ink: #ffffff; --accent-soft: rgba(57,135,229,.16);
+  /* categorical slots (validated: blue, orange, aqua) */
+  --c1: #3987e5; --c2: #d95926; --c3: #199e70;
+  /* ordinal blue ramp for maturity buckets (short -> long) */
+  --o1: #86b6ef; --o2: #3987e5; --o3: #1c5cab;
+  /* earlier curves: de-emphasised */
+  --g1: #a3abb8; --g2: #5f6775;
+  /* financial semantics: gain = green, loss = red, caution = amber (always with sign / icon / label) */
+  --gain: #1fae5b; --loss: #e5484d; --warn: #f2a516;
+  --gain-text: #3fd17a; --loss-text: #ff7a7d; --warn-text: #f5b83d;
+  --gain-soft: rgba(31,174,91,.15); --loss-soft: rgba(229,72,77,.15); --warn-soft: rgba(242,165,22,.15);
+  --tip: #1d2129; --shadow: 0 12px 32px -12px rgba(0,0,0,.6);
+  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --ease: cubic-bezier(.22,1,.36,1);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f4f6; --card: #ffffff; --card-2: #f7f8fa; --hover: rgba(15,23,42,.035);
+  --border: rgba(15,23,42,.08); --border-2: rgba(15,23,42,.15);
+  --fg: #0f1419; --fg-2: #3d4451; --muted: #6b7280;
+  --grid: #eceef1; --axis: #d3d7dd;
+  --accent: #2a78d6; --accent-soft: rgba(42,120,214,.10);
+  --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a;
+  --o1: #86b6ef; --o2: #2a78d6; --o3: #184f95;
+  --g1: #8a919e; --g2: #c3c8d0;
+  --gain: #0ca30c; --loss: #d03b3b; --warn: #e89a00;
+  --gain-text: #067a2b; --loss-text: #c42b2b; --warn-text: #8f5a00;
+  --gain-soft: rgba(12,163,12,.10); --loss-soft: rgba(208,59,59,.10); --warn-soft: rgba(232,154,0,.12);
+  --tip: #ffffff; --shadow: 0 12px 32px -12px rgba(15,23,42,.25);
+}
+
+/* ---------- base ---------- */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.mono { font-family: var(--mono); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.muted { color: var(--muted); } .fg2 { color: var(--fg-2); }
+.gain { color: var(--gain-text); } .loss { color: var(--loss-text); } .warn { color: var(--warn-text); }
+.app { max-width: 1240px; margin: 0 auto; padding: 16px 16px 40px; }
+
+/* ---------- top bar ---------- */
+.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 4px 14px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.logo { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); display: grid; place-items: center; flex: none; }
+.brand h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.01em; }
+.brand p { margin: 0; font-size: 12px; color: var(--muted); }
+.top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 999px; padding: 5px 11px; font-size: 12px; color: var(--fg-2); background: var(--card); white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.ok { background: var(--gain); box-shadow: 0 0 0 3px var(--gain-soft); } .dot.pending { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); } .dot.bad { background: var(--loss); box-shadow: 0 0 0 3px var(--loss-soft); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border-2); background: var(--card); border-radius: 999px; padding: 6px 13px; font-size: 12px; font-weight: 550; cursor: pointer; color: var(--fg); transition: background .15s, border-color .15s; }
+.btn:hover { background: var(--card-2); border-color: var(--muted); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); padding: 11px 16px; border-radius: 14px; font-size: 13px; font-weight: 650; width: 100%; }
+.btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
+.btn:disabled { opacity: .55; cursor: progress; }
+.icon-btn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: transparent; display: inline-grid; place-items: center; cursor: pointer; color: var(--muted); padding: 0; }
+.icon-btn:hover, .icon-btn[aria-expanded="true"] { color: var(--fg); border-color: var(--border-2); background: var(--hover); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0 4px 14px; }
+.meta .chip b { color: var(--fg); font-weight: 600; }
+
+/* ---------- alerts ---------- */
+#alerts:empty { display: none; }
+#alerts { display: grid; gap: 8px; margin-bottom: 12px; }
+.alert { border-radius: 14px; padding: 10px 14px; font-size: 13px; border: 1px solid; display: flex; gap: 10px; align-items: flex-start; }
+.alert.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 45%, transparent); color: var(--fg); }
+.alert.err { background: var(--loss-soft); border-color: color-mix(in srgb, var(--loss) 50%, transparent); color: var(--fg); font-weight: 600; }
+
+/* ---------- bento grid & tiles ---------- */
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+.tile { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 22px; padding: 18px 20px 20px; min-width: 0; display: flex; flex-direction: column; }
+.span2 { grid-column: span 2; } .span4 { grid-column: 1 / -1; } .row2 { grid-row: span 2; }
+.tile-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; min-height: 28px; }
+.tile-title { margin: 0; font-size: 13px; font-weight: 550; color: var(--muted); letter-spacing: .005em; }
+.tile-actions { display: flex; gap: 6px; align-items: center; flex: none; }
+.info { display: none; font-size: 12.5px; color: var(--fg-2); background: var(--card-2); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; margin: -2px 0 12px; }
+.info.open { display: block; } .info p { margin: 0 0 6px; } .info p:last-child { margin: 0; }
+.big { font-family: var(--mono); font-weight: 600; letter-spacing: -.04em; line-height: 1; }
+.label { font-size: 12px; color: var(--muted); }
+.sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 9px; font-family: var(--mono); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.pill.ok { background: var(--gain-soft); color: var(--gain-text); } .pill.pending { background: var(--warn-soft); color: var(--warn-text); } .pill.bad { background: var(--loss-soft); color: var(--loss-text); } .pill.neutral { background: var(--accent-soft); color: var(--fg); }
+.data-panel { display: none; margin-top: 14px; } .data-panel.open { display: block; }
+body.is-empty .needs-data { display: none !important; }
+
+/* hero */
+.hero .question { font-size: 13px; color: var(--fg-2); margin: 0 0 16px; max-width: 62ch; }
+.hero-figs { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 24px; }
+.hero .big { font-size: clamp(38px, 5.4vw, 54px); }
+.delta { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+.headline { font-size: 13px; color: var(--fg-2); margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.strip-wrap { margin-top: 18px; }
+.strip-foot { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 6px; }
+.strip-foot .now { color: var(--fg); text-align: center; }
+.keys { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.ln { width: 16px; height: 0; border-top: 2px solid; display: inline-block; flex: none; }
+.ln.dash { border-top-style: dashed; } .ln.dot2 { border-top-style: dotted; }
+
+/* gauge */
+.gauge { display: flex; flex-direction: column; align-items: center; flex: 1; justify-content: center; }
+.gauge svg { overflow: visible; }
+
+/* data feed tile */
+.feed-date { font-size: 30px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 12px; margin: 14px 0; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-size: 12px; color: var(--fg-2); }
+#checkMsg { display: block; min-height: 18px; margin-top: 8px; font-size: 12px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; font-weight: 550; margin-top: 10px; align-self: flex-start; }
+.status-line { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+
+/* controls */
+.controls { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
+.ctl-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.ctl-label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 999px; padding: 3px; gap: 2px; background: var(--card-2); }
+.seg label, .chips label { position: relative; cursor: pointer; }
+.seg input, .chips input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.seg span { display: block; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 550; color: var(--muted); transition: background .15s, color .15s; white-space: nowrap; }
+.seg label:hover span { color: var(--fg); }
+.seg input:checked + span { background: var(--fg); color: var(--bg); }
+.seg input:focus-visible + span, .chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.chips label > span { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border-2); border-radius: 999px; padding: 5px 12px 5px 9px; font-size: 12px; font-weight: 550; color: var(--muted); transition: all .15s; }
+.chips label > span .sw { opacity: .35; }
+.chips input:checked + span { color: var(--fg); background: var(--card-2); }
+.chips input:checked + span .sw { opacity: 1; }
+.custom-box { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.sliders { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 22px; margin: 10px 0 12px; }
+.sliders div { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.sliders .t { width: 42px; color: var(--muted); font-family: var(--mono); }
+.sliders .v { width: 38px; text-align: right; font-family: var(--mono); }
+input[type=range] { flex: 1; min-width: 60px; accent-color: var(--accent); }
+.wsum-row { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; font-size: 12px; }
+
+/* stat tiles */
+.stat .big { font-size: 30px; margin-top: 2px; }
+.stat .unit { font-size: 13px; color: var(--muted); font-family: var(--sans); font-weight: 500; letter-spacing: 0; margin-left: 4px; }
+.segbar { display: flex; gap: 2px; height: 8px; margin-top: 16px; }
+.segbar span { border-radius: 999px; transition: flex-basis .9s var(--ease); }
+.seglegend { display: grid; grid-template-columns: repeat(3, auto); justify-content: space-between; gap: 4px 10px; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+.seglegend b { color: var(--fg); font-family: var(--mono); font-weight: 600; margin-left: 4px; }
+.compare { margin-top: auto; padding-top: 14px; display: grid; gap: 8px; }
+.cmp-row { display: grid; grid-template-columns: 82px 1fr 60px; gap: 8px; align-items: center; font-size: 11.5px; color: var(--muted); }
+.cmp-track { height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
+.cmp-track span { display: block; height: 100%; border-radius: 999px; transition: width .9s var(--ease); }
+.cmp-row b { text-align: right; color: var(--fg); font-family: var(--mono); font-weight: 600; }
+
+/* charts */
+.fig-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 26px; margin-bottom: 10px; }
+.fig-head .big { font-size: 24px; letter-spacing: -.03em; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+.viz .grid-line { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
+.viz .base-line { stroke: var(--axis); stroke-width: 1; shape-rendering: crispEdges; }
+.viz .tick { fill: var(--muted); font: 11px var(--mono); font-variant-numeric: tabular-nums; }
+.viz .vlabel { fill: var(--fg-2); font: 600 11px var(--mono); font-variant-numeric: tabular-nums; }
+.viz .hair { stroke: var(--border-2); stroke-width: 1; }
+.viz .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.2s var(--ease) forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.viz .grow { transform-box: fill-box; transform-origin: bottom; animation: grow .8s var(--ease) backwards; }
+@keyframes grow { from { transform: scaleY(0); } }
+#tip { position: fixed; z-index: 50; pointer-events: none; background: var(--tip); border: 1px solid var(--border-2); border-radius: 12px; padding: 9px 11px; box-shadow: var(--shadow); font-size: 12px; min-width: 150px; max-width: 280px; opacity: 0; transform: translateY(4px); transition: opacity .12s, transform .12s; }
+#tip.on { opacity: 1; transform: none; }
+#tip .tt { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+#tip .tr { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+#tip .tr b { font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 12px; }
+#tip .tr span { color: var(--fg-2); }
+
+/* tables */
+.tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { padding: 9px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+th { font-weight: 550; color: var(--muted); font-size: 11.5px; background: transparent; }
+td { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; }
+th:first-child, td:first-child { text-align: left; white-space: normal; min-width: 9em; font-family: var(--sans); font-size: 12.5px; }
+tbody tr:hover td { background: var(--hover); }
+tbody tr:last-child td { border-bottom: 0; }
+.txt td { font-family: var(--sans); white-space: normal; text-align: left; }
+.txt td:nth-child(2) { white-space: nowrap; }
+.st { font-weight: 600; font-family: var(--sans); } .st-ok { color: var(--gain-text); } .st-pending { color: var(--warn-text); } .st-bad { color: var(--loss-text); } .st-muted { color: var(--muted); }
+
+/* scenarios */
+.scen td:first-child { min-width: 13em; }
+.scen .sname { font-weight: 600; color: var(--fg); }
+.scen .stype { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+.gapcell { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.divbar { position: relative; width: 120px; height: 8px; flex: none; }
+.divbar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--axis); }
+.divbar span { position: absolute; top: 0; bottom: 0; border-radius: 999px; transition: width .8s var(--ease), left .8s var(--ease); }
+.shocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px 10px; margin: 10px 0 4px; }
+.shocks label { display: block; font-size: 11px; color: var(--muted); font-family: var(--mono); margin-bottom: 3px; }
+.shocks input { width: 100%; background: var(--card-2); border: 1px solid var(--border-2); border-radius: 10px; padding: 6px 8px; font-family: var(--mono); font-size: 12px; }
+
+/* updates history & about */
+.history h3, .about h3 { font-size: 13px; font-weight: 600; margin: 18px 0 8px; color: var(--fg); }
+.history h3:first-child { margin-top: 0; }
+.about-body { display: none; color: var(--fg-2); font-size: 13px; } .about-body.open { display: block; }
+.about-body p, .about-body li { max-width: 92ch; } .about-body ul, .about-body ol { padding-left: 20px; }
+.about-body h2 { display: none; }
+.about-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: none; border: 0; padding: 0; width: 100%; cursor: pointer; text-align: left; }
+.about-toggle .tile-title { color: var(--fg); font-size: 14px; }
+.chev { transition: transform .2s; } [aria-expanded="true"] .chev { transform: rotate(180deg); }
+details.how { margin-top: 14px; } details.how summary { cursor: pointer; color: var(--accent); font-size: 12.5px; font-weight: 550; }
+details.how p { font-size: 12.5px; color: var(--fg-2); margin: 8px 0; }
+footer { text-align: center; color: var(--muted); font-size: 12px; padding: 22px 0 6px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1080px) {
+  .grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .row2 { grid-row: auto; }
+}
+@media (max-width: 640px) {
+  .app { padding: 12px 12px 32px; }
+  .grid { grid-template-columns: minmax(0,1fr); gap: 10px; }
+  .span2 { grid-column: auto; }
+  .tile { border-radius: 18px; padding: 16px; }
+  .headline { text-align: left; }
+  .divbar { width: 64px; }
+  .meta { padding-bottom: 10px; }
+  .meta .chip { white-space: normal; border-radius: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1 id="title"></h1>
-    <p class="sub" id="question"></p>
-    <div class="dates" id="dates"></div>
-    <div id="alerts"></div>
-  </header>
-  <div class="headline" id="headline"></div>
-
-  <section class="card" id="controls">
-    <h2>Choose what to look at</h2>
-    <p class="small">Every number, chart and table on this page recalculates when you change a choice below.</p>
-    <div class="controls">
-      <fieldset><legend>Obligation categories</legend><span id="cats"></span></fieldset>
-      <fieldset><legend>Portfolio strategy (all cost the same as the obligations)</legend><span id="strategies"></span></fieldset>
+<div class="app">
+  <nav class="topbar" aria-label="Dashboard">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/></svg>
+      </div>
+      <div><h1 id="title">Progetto Fintech ADFH</h1><p>Treasury defeasance monitor</p></div>
     </div>
-    <div id="customBox" hidden>
-      <h3>Custom weights (share of the budget, must sum to 100%)</h3>
-      <div class="sliders" id="sliders"></div>
-      <div><b id="wsum"></b> <button id="normBtn" type="button">Normalise to 100%</button> <button id="resetBtn" type="button">Reset</button></div>
+    <div class="top-actions">
+      <span class="chip" id="statusChip"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></span>
+      <button class="btn" type="button" id="aboutBtn">Methodology</button>
+      <button class="btn" type="button" id="themeBtn" aria-label="Switch colour theme">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <span id="themeLabel">Light</span>
+      </button>
     </div>
-  </section>
+  </nav>
+  <div class="meta" id="dates"></div>
+  <div id="alerts" role="status"></div>
 
-  <section class="grid4" id="kpis"></section>
+  <main class="grid" id="main">
+    <!-- 1. Hero: cost to secure -->
+    <section class="tile span2 hero" aria-labelledby="heroTitle">
+      <div class="tile-head">
+        <h2 class="tile-title" id="heroTitle">Cost to secure obligations today</h2>
+        <div class="tile-actions"><button class="icon-btn" type="button" data-info="heroInfo" aria-label="What this shows">i</button></div>
+      </div>
+      <div class="info" id="heroInfo"></div>
+      <p class="question" id="question"></p>
+      <div class="big" id="heroValue">—</div>
+      <div class="delta" id="heroDelta"></div>
+      <p class="headline" id="headline"></p>
+      <div class="strip-wrap needs-data">
+        <div class="chart" id="strip"></div>
+        <div class="strip-foot"><span id="stripFrom"></span><span class="now" id="stripNow" aria-live="polite">Daily change in cost to secure</span><span>Latest</span></div>
+        <div class="keys"><span class="key"><span class="sw" style="background:var(--loss)"></span>Cost rose (worse)</span><span class="key"><span class="sw" style="background:var(--gain)"></span>Cost fell (better)</span></div>
+      </div>
+    </section>
 
-  <section class="card"><h2>View 1. Treasury yield curve today versus one month and one year earlier</h2>
-    <p class="small" id="v1note"></p><div class="chartbox"><canvas id="c1" role="img" aria-label="Yield curve chart"></canvas></div>
-    <details><summary>Show data table</summary><div class="tablewrap" id="t1"></div></details></section>
+    <!-- 2. Coverage gauge -->
+    <section class="tile needs-data" aria-labelledby="covTitle">
+      <div class="tile-head">
+        <h2 class="tile-title" id="covTitle">Coverage ratio</h2>
+        <div class="tile-actions"><button class="icon-btn" type="button" data-info="covInfo" aria-label="What this shows">i</button></div>
+      </div>
+      <div class="info" id="covInfo"><p>Cash and cash equivalents divided by the cost to secure. A ratio below 100% is not a sign of distress: operating cash flows and pension plan assets are not counted.</p></div>
+      <div class="gauge" id="gauge"></div>
+      <div class="sub" id="covSub" style="text-align:center"></div>
+    </section>
 
-  <section class="card"><h2>View 2. Obligation schedule by year: nominal and present value by category</h2>
-    <p class="small" id="v2note"></p><div class="chartbox"><canvas id="c2" role="img" aria-label="Obligation schedule chart"></canvas></div>
-    <details><summary>Show data table</summary><div class="tablewrap" id="t2"></div></details></section>
+    <!-- 3. Data feed (daily updates) -->
+    <section class="tile" id="feedTile" aria-labelledby="feedTitle">
+      <div class="tile-head">
+        <h2 class="tile-title" id="feedTitle">Treasury data feed</h2>
+        <span class="pill neutral" id="feedPill">…</span>
+      </div>
+      <div class="status-line" id="feedStatus"></div>
+      <div class="label">Latest Treasury curve</div>
+      <div class="big feed-date" id="feedDate">—</div>
+      <div class="sub" id="feedSaved"></div>
+      <dl class="kv"><dt>Last check</dt><dd id="feedLast">loading…</dd><dt>Next check</dt><dd id="feedNext">—</dd></dl>
+      <button class="btn btn-primary" type="button" id="checkBtn">Check for new data now</button>
+      <span id="checkMsg" class="small" aria-live="polite"></span>
+      <button class="linkbtn" type="button" id="historyBtn" aria-expanded="false" aria-controls="history">Update history ›</button>
+    </section>
 
-  <section class="card"><h2>View 3. Rate sensitivity by maturity bucket: obligations versus the selected portfolio</h2>
-    <p class="small" id="v3note"></p><div class="chartbox"><canvas id="c3" role="img" aria-label="Bucket DV01 chart"></canvas></div>
-    <details open><summary>Show data table (signed DV01 and gaps, all strategies)</summary><div class="tablewrap" id="t3"></div></details></section>
+    <!-- 3b. Update history (opens from the feed tile) -->
+    <section class="tile span4 history" id="history" hidden aria-label="Update history">
+      <div class="tile-head"><h2 class="tile-title">Update history</h2><button class="icon-btn" type="button" id="historyClose" aria-label="Close update history">✕</button></div>
+      <div id="updBanner"></div>
+      <h3>Last 10 Treasury business days</h3>
+      <div class="tablewrap" id="upd-days"></div>
+      <h3>Recent checks</h3>
+      <div class="tablewrap" id="upd-runs"><p class="muted">Loading the latest checks from GitHub…</p></div>
+      <details class="how" id="how"><summary>How the automatic update works</summary></details>
+    </section>
 
-  <section class="card"><h2>View 4. What happens under each scenario (selected strategy)</h2>
-    <p class="small" id="v4note"></p><div class="tablewrap" id="t4"></div>
-    <h3>Custom scenario: shock per tenor in basis points</h3>
-    <p class="small">The 3 Mo shock only matters for a 3 Mo bill held in the Custom strategy: the obligations start at 0.5 years.</p>
-    <div class="shocks" id="shocks"></div>
-  </section>
+    <!-- 4. Controls -->
+    <section class="tile span4 needs-ok" aria-label="Choose what to look at">
+      <div class="controls">
+        <div class="ctl-group"><span class="ctl-label">Obligations</span><div class="chips" id="cats" role="group" aria-label="Obligation categories"></div></div>
+        <div class="ctl-group"><span class="ctl-label">Portfolio strategy</span><div class="seg" id="strategies" role="radiogroup" aria-label="Portfolio strategy"></div>
+          <button class="icon-btn" type="button" data-info="ctlInfo" aria-label="About the strategies">i</button></div>
+      </div>
+      <div class="info" id="ctlInfo" style="margin-top:12px"><p>Every number, chart and table recalculates when you change a choice. All strategies cost the same as the obligations, so they compare on equal terms. Cash flow matching is a theoretical benchmark: one zero coupon bond per payment date, gap zero by construction.</p></div>
+      <div class="custom-box" id="customBox" hidden>
+        <div class="ctl-label">Custom weights: share of the budget per Treasury, must sum to 100%</div>
+        <div class="sliders" id="sliders"></div>
+        <div class="wsum-row"><b id="wsum" class="num"></b><button class="btn" id="normBtn" type="button">Normalise to 100%</button><button class="btn" id="resetBtn" type="button">Reset</button></div>
+      </div>
+    </section>
 
-  <section class="card" id="updates"></section>
+    <!-- 5. Obligations DV01 -->
+    <section class="tile stat needs-data" aria-labelledby="dvTitle">
+      <div class="tile-head"><h2 class="tile-title" id="dvTitle">Obligations DV01</h2>
+        <div class="tile-actions"><button class="icon-btn" type="button" data-info="dvInfo" aria-label="What this shows">i</button></div></div>
+      <div class="info" id="dvInfo"><p>Value change of the obligations if all rates rise by 0.01 percentage points (1 basis point). Negative because values fall when rates rise. The bar shows how the sensitivity splits by maturity bucket.</p></div>
+      <div class="big" id="dvValue">—</div>
+      <div class="sub" id="dvSub"></div>
+      <div class="segbar" id="dvBar" role="img"></div>
+      <div class="seglegend" id="dvLegend"></div>
+    </section>
 
-  <section class="card" id="about"></section>
+    <!-- 6. Portfolio gap -->
+    <section class="tile stat needs-data" aria-labelledby="gapTitle">
+      <div class="tile-head"><h2 class="tile-title" id="gapTitle">Portfolio DV01 gap</h2><span class="pill" id="gapPill"></span></div>
+      <div class="big" id="gapValue">—</div>
+      <div class="sub" id="gapSub"></div>
+      <div class="compare" id="gapCompare"></div>
+    </section>
+
+    <!-- 7. Yield curve -->
+    <section class="tile span2 row2 needs-data" aria-labelledby="curveTitle">
+      <div class="tile-head"><h2 class="tile-title" id="curveTitle">US Treasury par yield curve</h2>
+        <div class="tile-actions"><button class="btn" type="button" data-panel="t1" aria-expanded="false">Data</button><button class="icon-btn" type="button" data-info="v1note" aria-label="What this shows">i</button></div></div>
+      <div class="info" id="v1note"></div>
+      <div class="fig-head" id="curveHead"></div>
+      <div class="chart" id="c1" style="flex:1 1 auto;min-height:0"></div>
+      <div class="keys" id="c1keys"></div>
+      <div class="data-panel tablewrap" id="t1"></div>
+    </section>
+
+    <!-- 8. Rate sensitivity by bucket -->
+    <section class="tile span2 needs-data" aria-labelledby="sensTitle">
+      <div class="tile-head"><h2 class="tile-title" id="sensTitle">Rate sensitivity by maturity</h2>
+        <div class="tile-actions"><button class="btn" type="button" data-panel="t3" aria-expanded="false">Data</button><button class="icon-btn" type="button" data-info="v3note" aria-label="What this shows">i</button></div></div>
+      <div class="info" id="v3note"></div>
+      <div class="chart" id="c3"></div>
+      <div class="keys" id="c3keys"></div>
+      <div class="data-panel tablewrap" id="t3"></div>
+    </section>
+
+    <!-- 9. Obligation schedule -->
+    <section class="tile span4 needs-data" aria-labelledby="schTitle">
+      <div class="tile-head"><h2 class="tile-title" id="schTitle">Obligation schedule: present value by year</h2>
+        <div class="tile-actions"><button class="btn" type="button" data-panel="t2" aria-expanded="false">Data</button><button class="icon-btn" type="button" data-info="v2note" aria-label="What this shows">i</button></div></div>
+      <div class="info" id="v2note"></div>
+      <div class="fig-head" id="schHead"></div>
+      <div class="chart" id="c2"></div>
+      <div class="keys" id="c2keys"></div>
+      <div class="data-panel tablewrap" id="t2"></div>
+    </section>
+
+    <!-- 10. Scenarios -->
+    <section class="tile span4 needs-data" aria-labelledby="scTitle">
+      <div class="tile-head"><h2 class="tile-title" id="scTitle">Scenarios</h2>
+        <div class="tile-actions"><button class="btn" type="button" data-panel="shockPanel" aria-expanded="false">Custom shock</button><button class="icon-btn" type="button" data-info="v4note" aria-label="What this shows">i</button></div></div>
+      <div class="info" id="v4note"></div>
+      <div class="fig-head" id="scHead"></div>
+      <div class="data-panel" id="shockPanel">
+        <div class="ctl-label">Custom scenario: shock per tenor in basis points. The 3 Mo shock only matters for a 3 Mo bill held in the Custom strategy: the obligations start at 0.5 years.</div>
+        <div class="shocks" id="shocks"></div>
+      </div>
+      <div class="tablewrap" id="t4"></div>
+      <div class="keys"><span class="key"><span class="sw" style="background:var(--gain)"></span>Better for the company (cheaper obligations, portfolio gains, surplus)</span><span class="key"><span class="sw" style="background:var(--loss)"></span>Worse (costlier obligations, portfolio losses, shortfall)</span></div>
+    </section>
+
+    <!-- 11. About -->
+    <section class="tile span4 about" id="aboutTile">
+      <button class="about-toggle" type="button" id="aboutToggle" aria-expanded="false" aria-controls="about">
+        <span><span class="tile-title">Methodology, data sources, assumptions and limitations</span><br><span class="label">Method, sources, the assumption sensitivity table and when this can mislead</span></span>
+        <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="about-body" id="about"></div>
+    </section>
+  </main>
+  <footer>Educational project. Not investment advice.</footer>
 </div>
-<footer>Educational project. Not investment advice.</footer>
+<div id="tip" role="tooltip"></div>
 
 <script src="engine.js"></script>
 <script src="data.js"></script>
 <script>
-/* Data loader: all data comes from data.js (window.DASHBOARD_DATA), refreshed every day by scripts/update-curve.mjs. Nothing is fetched from the network. */
-function loadDashboardData() {
-  return Promise.resolve(window.DASHBOARD_DATA);
-}
+/* Data loader: all data comes from data.js (window.DASHBOARD_DATA), refreshed every day by scripts/update-curve.mjs. */
+function loadDashboardData() { return Promise.resolve(window.DASHBOARD_DATA); }
 loadDashboardData().then(function (d) {
   if (!window.ADFH_ENGINE) throw new Error("Calculation engine missing (engine.js must be in the same folder as index.html).");
   if (!d || !d.summary || !d.data) throw new Error("Dashboard data missing or invalid");
   render(d.summary, d.data);
 }).catch(function (e) {
-  const message = document.createElement("p");
-  message.textContent = "Unable to load dashboard data. Check data.js. " + e.message;
-  document.body.appendChild(message);
+  const p = document.createElement("div"); p.className = "alert err";
+  p.textContent = "Unable to load dashboard data. Check data.js. " + e.message;
+  document.getElementById("alerts").appendChild(p);
+  console.error(e);
 });
 
 /* ---------------- helpers ---------------- */
@@ -126,122 +446,385 @@ function el(tag, text, cls) { const e = document.createElement(tag); if (text !=
 function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
 function bizDays(fromIso, to) { let n = 0; const d = new Date(fromIso + "T00:00:00Z"); const end = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()); while (d.getTime() < end) { d.setUTCDate(d.getUTCDate() + 1); const w = d.getUTCDay(); if (w !== 0 && w !== 6 && d.getTime() <= end) n++; } return n; }
 function monthsBetween(iso, to) { const a = new Date(iso + "T00:00:00Z"); return (to.getUTCFullYear() - a.getUTCFullYear()) * 12 + (to.getUTCMonth() - a.getUTCMonth()); }
+const REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function cssv(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+const signed = function (x, d) { const s = sgn(x, d); return s === "n/a" || s.charAt(0) === "-" ? s.replace("-", "−") : (Number(Math.abs(x).toFixed(d)) === 0 ? s : "+" + s); };
+const money = function (x, d) { return dsgn(x, d).replace("-", "−"); };   // "-$3.8" -> "−$3.8"
+const smoney = function (x, d) { const v = money(x, d); return v.charAt(0) === "−" || Number(Math.abs(x).toFixed(d)) === 0 ? v : "+" + v; };
+function shortDate(iso) { return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }); }
+/* Text colour for a value where a rise is good (goodUp) or bad. */
+function tone(x, goodUp, eps) { if (!isFinite(x) || Math.abs(x) <= (eps || 0)) return ""; return (x > 0) === goodUp ? "gain" : "loss"; }
+function arrow(x, eps) { return !isFinite(x) || Math.abs(x) <= (eps || 0) ? "■ " : (x > 0 ? "▲ " : "▼ "); }
 
-const App = { state: null, charts: {}, blocked: false };
-
-/* ---------------- rendering ---------------- */
-const STRAT = [["cfm", "Cash flow matching (theoretical benchmark)"], ["bullet", "Bullet"], ["barbell", "Barbell"], ["ladder", "Ladder"], ["custom", "Custom"]];
+const App = { state: null, blocked: false, R: null, heroShown: null, drawn: {} };
+const STRAT = [["cfm", "Cash flow matching"], ["bullet", "Bullet"], ["barbell", "Barbell"], ["ladder", "Ladder"], ["custom", "Custom"]];
 const STRAT_SHORT = { cfm: "Cash flow matching", bullet: "Bullet", barbell: "Barbell", ladder: "Ladder", custom: "Custom" };
-const CAT = [["debt", "Debt principal"], ["lease", "Operating leases"], ["pens", "Pensions"]];
+const CAT = [["debt", "Debt principal", "--c1"], ["lease", "Operating leases", "--c2"], ["pens", "Pensions", "--c3"]];
 const BUCKETS = ["0 to 2 years", "2 to 7 years", "7 to 30 years"];
+const BUCKETS_SHORT = ["0–2y", "2–7y", "7–30y"];
 
-function table(headers, rows) {
+function table(headers, rows, cls) {
   const t = el("table"), th = el("thead"), trh = el("tr");
   headers.forEach(function (h) { trh.appendChild(el("th", h)); }); th.appendChild(trh); t.appendChild(th);
-  const tb = el("tbody"); rows.forEach(function (r) { const tr = el("tr"); r.forEach(function (c) { tr.appendChild(el("td", c)); }); tb.appendChild(tr); }); t.appendChild(tb); return t;
+  const tb = el("tbody"); rows.forEach(function (r) { const tr = el("tr"); r.forEach(function (c) { const td = el("td"); if (c && typeof c === "object") td.appendChild(c); else td.textContent = c; tr.appendChild(td); }); tb.appendChild(tr); }); t.appendChild(tb);
+  if (cls) t.className = cls; return t;
 }
-function setChart(id, cfg) {
-  if (!window.Chart) { const b = $(id).parentNode; if (!b.querySelector(".warn")) b.appendChild(el("p", "The chart library could not be loaded (internet needed for the charts). The numbers are in the data table below.", "warn")); $(id).style.display = "none"; b.style.height = "auto"; const det = b.parentNode.querySelector("details"); if (det) det.open = true; return; }
-  if (App.charts[id]) { App.charts[id].destroy(); }
-  App.charts[id] = new Chart($(id), cfg);
-}
-const PAL = ["#1f5fa8", "#d9731a", "#1f8a83", "#7b4fa3", "#7a8594"];
 
+/* ---------------- tooltip ---------------- */
+const TIP = { el: null };
+function showTip(x, y, title, rows) {
+  const t = TIP.el || (TIP.el = $("tip")); clear(t);
+  t.appendChild(el("div", title, "tt"));
+  rows.forEach(function (r) {
+    const row = el("div", null, "tr");
+    if (r.color) { const k = el("span", null, r.line ? "ln" + (r.dash ? " " + r.dash : "") : "sw"); if (r.line) k.style.borderTopColor = r.color; else k.style.background = r.color; row.appendChild(k); }
+    row.appendChild(el("span", r.name)); const b = el("b", r.value); if (r.cls) b.className = r.cls; row.appendChild(b); t.appendChild(row);
+  });
+  t.classList.add("on");
+  const w = t.offsetWidth, h = t.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+  let left = x + 14, top = y - h - 12; if (left + w > vw - 8) left = x - w - 14; if (left < 8) left = 8; if (top < 8) top = y + 16; if (top + h > vh - 8) top = vh - h - 8;
+  t.style.left = left + "px"; t.style.top = top + "px";
+}
+function hideTip() { if (TIP.el) TIP.el.classList.remove("on"); }
+
+/* ---------------- SVG chart toolkit ---------------- */
+const NS = "http://www.w3.org/2000/svg";
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function ticks(lo, hi, n) {
+  const raw = (hi - lo || 1) / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  const st = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+  const a = Math.floor(lo / st + 1e-9) * st, b = Math.ceil(hi / st - 1e-9) * st, out = [];
+  for (let v = a; v <= b + st / 2; v += st) out.push(Number(v.toFixed(10)));
+  return out;
+}
+function frame(host, h, fill) {
+  clear(host);
+  if (fill) h = Math.max(h, Math.floor(host.clientHeight || 0));
+  const w = Math.max(260, Math.round(host.clientWidth || host.parentNode.clientWidth || 600));
+  const s = S("svg", { width: w, height: h, viewBox: "0 0 " + w + " " + h, class: "viz" }, host);
+  return { s: s, w: w, h: h };
+}
+function barPath(x, y, w, h, r) { if (h <= 0.5) return ""; r = Math.min(r, w / 2, h); return "M" + x + "," + (y + h) + "V" + (y + r) + "Q" + x + "," + y + " " + (x + r) + "," + y + "H" + (x + w - r) + "Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) + "V" + (y + h) + "Z"; }
+function barPathDown(x, y, w, h, r) { if (h <= 0.5) return ""; r = Math.min(r, w / 2, h); return "M" + x + "," + y + "V" + (y + h - r) + "Q" + x + "," + (y + h) + " " + (x + r) + "," + (y + h) + "H" + (x + w - r) + "Q" + (x + w) + "," + (y + h) + " " + (x + w) + "," + (y + h - r) + "V" + y + "Z"; }
+/* Keyboard + pointer index tracking shared by every chart. */
+function interact(s, n, xOf, onIndex, onLeave) {
+  let cur = null;
+  s.setAttribute("tabindex", "0");
+  const pick = function (clientX) { const r = s.getBoundingClientRect(); const x = (clientX - r.left) * (s.viewBox.baseVal.width / r.width); let best = 0, bd = Infinity; for (let i = 0; i < n; i++) { const d = Math.abs(xOf(i) - x); if (d < bd) { bd = d; best = i; } } return best; };
+  s.addEventListener("pointermove", function (e) { cur = pick(e.clientX); onIndex(cur, e.clientX, e.clientY); });
+  s.addEventListener("pointerleave", function () { cur = null; onLeave(); });
+  s.addEventListener("blur", function () { cur = null; onLeave(); });
+  s.addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
+    e.preventDefault(); cur = cur === null ? n - 1 : e.key === "ArrowLeft" ? Math.max(0, cur - 1) : e.key === "ArrowRight" ? Math.min(n - 1, cur + 1) : e.key === "Home" ? 0 : n - 1;
+    const r = s.getBoundingClientRect(), k = r.width / s.viewBox.baseVal.width; onIndex(cur, r.left + xOf(cur) * k, r.top + 30);
+  });
+}
+
+/* Line chart: one y axis, categorical x, crosshair + one tooltip listing every series. */
+function lineChart(host, o) {
+  const F = frame(host, o.height || 280, o.fill), s = F.s, w = F.w, h = F.h, m = { l: 46, r: 16, t: 14, b: 28 };
+  const all = []; o.series.forEach(function (x) { x.values.forEach(function (v) { if (v !== null && isFinite(v)) all.push(v); }); });
+  let lo = Math.min.apply(null, all), hi = Math.max.apply(null, all); const pad = (hi - lo) * 0.15 || 0.1; lo -= pad; hi += pad;
+  const tk = ticks(lo, hi, 4); lo = tk[0]; hi = tk[tk.length - 1];
+  const n = o.labels.length, X = function (i) { return m.l + (w - m.l - m.r) * (i / (n - 1)); }, Y = function (v) { return m.t + (h - m.t - m.b) * (1 - (v - lo) / (hi - lo)); };
+  tk.forEach(function (v) { S("line", { x1: m.l, x2: w - m.r, y1: Y(v), y2: Y(v), class: "grid-line" }, s); S("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end", class: "tick" }, s).textContent = o.yFmt(v); });
+  const every = w < 460 ? 2 : 1;
+  o.labels.forEach(function (l, i) { if ((n - 1 - i) % every) return; S("text", { x: X(i), y: h - 8, "text-anchor": "middle", class: "tick" }, s).textContent = l; });
+  const first = !App.drawn[host.id] && !REDUCED; App.drawn[host.id] = true;
+  o.series.slice().reverse().forEach(function (sr) {
+    const pts = sr.values.map(function (v, i) { return v === null ? null : [X(i), Y(v)]; });
+    const d = pts.filter(Boolean).map(function (p, i) { return (i ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1); }).join("");
+    if (sr.area) S("path", { d: d + "L" + X(n - 1) + "," + (h - m.b) + "L" + X(0) + "," + (h - m.b) + "Z", fill: sr.color, "fill-opacity": 0.1 }, s);
+    const p = S("path", { d: d, fill: "none", stroke: sr.color, "stroke-width": sr.width || 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, s);
+    if (sr.dash) p.setAttribute("stroke-dasharray", sr.dash);
+    else if (first) { p.setAttribute("pathLength", "1"); p.setAttribute("class", "draw"); }
+    if (sr.markers) pts.forEach(function (q) { if (q) S("circle", { cx: q[0], cy: q[1], r: 4, fill: sr.color, stroke: cssv("--card"), "stroke-width": 2 }, s); });
+  });
+  const hov = S("g", { opacity: 0 }, s), vl = S("line", { y1: m.t, y2: h - m.b, class: "hair" }, hov);
+  const dots = o.series.map(function (sr) { return S("circle", { r: 5, fill: sr.color, stroke: cssv("--card"), "stroke-width": 2 }, hov); });
+  interact(s, n, X, function (i, cx, cy) {
+    hov.setAttribute("opacity", 1); vl.setAttribute("x1", X(i)); vl.setAttribute("x2", X(i));
+    o.series.forEach(function (sr, k) { const v = sr.values[i]; dots[k].setAttribute("cx", X(i)); dots[k].setAttribute("cy", v === null ? -99 : Y(v)); });
+    showTip(cx, cy, o.tipTitle(i), o.series.map(function (sr) { return { color: sr.color, line: true, dash: sr.dashKey, name: sr.name, value: sr.values[i] === null ? "n/a" : o.valFmt(sr.values[i]) }; }));
+  }, function () { hov.setAttribute("opacity", 0); hideTip(); });
+  s.setAttribute("role", "img"); s.setAttribute("aria-label", o.aria);
+}
+
+/* Grouped columns from one baseline, value printed on each cap (few bars), hover per group. */
+function groupedBars(host, o) {
+  const F = frame(host, o.height || 250), s = F.s, w = F.w, h = F.h, m = { l: 46, r: 12, t: 22, b: 30 };
+  const all = [0]; o.series.forEach(function (x) { x.values.forEach(function (v) { if (v !== null) all.push(v); }); });
+  const tk = ticks(0, Math.max.apply(null, all) * 1.08 || 1, 4), hi = tk[tk.length - 1];
+  const Y = function (v) { return m.t + (h - m.t - m.b) * (1 - v / hi); }, G = o.groups.length, band = (w - m.l - m.r) / G;
+  const bw = Math.min(28, (band * 0.62) / o.series.length), gap = 4;
+  const gx = function (g) { return m.l + band * g + band / 2; };
+  tk.forEach(function (v) { S("line", { x1: m.l, x2: w - m.r, y1: Y(v), y2: Y(v), class: v === 0 ? "base-line" : "grid-line" }, s); S("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end", class: "tick" }, s).textContent = o.yFmt(v); });
+  const first = !App.drawn[host.id] && !REDUCED; App.drawn[host.id] = true;
+  const groupsEls = [];
+  o.groups.forEach(function (g, gi) {
+    const ge = S("g", {}, s); groupsEls.push(ge);
+    const tot = o.series.length * bw + (o.series.length - 1) * gap, x0 = gx(gi) - tot / 2;
+    o.series.forEach(function (sr, k) {
+      const v = sr.values[gi]; if (v === null) return; const x = x0 + k * (bw + gap), y = Y(Math.max(0, v));
+      const p = S("path", { d: barPath(x, y, bw, Y(0) - y, 4), fill: sr.color }, ge); if (first) p.setAttribute("class", "grow");
+      S("text", { x: x + bw / 2, y: y - 6, "text-anchor": "middle", class: "vlabel" }, ge).textContent = o.valFmt(v);
+    });
+    S("text", { x: gx(gi), y: h - 9, "text-anchor": "middle", class: "tick" }, s).textContent = w < 480 && o.shortGroups ? o.shortGroups[gi] : g;
+  });
+  interact(s, G, gx, function (i, cx, cy) {
+    groupsEls.forEach(function (g, k) { g.setAttribute("opacity", k === i ? 1 : 0.4); });
+    showTip(cx, cy, o.groups[i], o.tip(i));
+  }, function () { groupsEls.forEach(function (g) { g.setAttribute("opacity", 1); }); hideTip(); });
+  s.setAttribute("role", "img"); s.setAttribute("aria-label", o.aria);
+}
+
+/* Stacked columns (2px surface gap between segments) + a total line, one axis. */
+function stackedColumns(host, o) {
+  const F = frame(host, o.height || 270), s = F.s, w = F.w, h = F.h, m = { l: 50, r: 12, t: 12, b: 28 };
+  const n = o.labels.length, tops = o.labels.map(function (_, i) { return o.stacks.reduce(function (a, st) { return a + st.values[i]; }, 0); });
+  const tk = ticks(0, Math.max(Math.max.apply(null, tops), o.line ? Math.max.apply(null, o.line.values) : 0) * 1.05 || 1, 4), hi = tk[tk.length - 1];
+  const Y = function (v) { return m.t + (h - m.t - m.b) * (1 - v / hi); }, band = (w - m.l - m.r) / n, bw = Math.max(3, Math.min(24, band - 3));
+  const X = function (i) { return m.l + band * i + band / 2; };
+  tk.forEach(function (v) { S("line", { x1: m.l, x2: w - m.r, y1: Y(v), y2: Y(v), class: v === 0 ? "base-line" : "grid-line" }, s); S("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end", class: "tick" }, s).textContent = o.yFmt(v); });
+  const step = w < 520 ? 5 : w < 900 ? 2 : 1;
+  o.labels.forEach(function (l, i) { if ((i + 1) % step && i !== 0) return; S("text", { x: X(i), y: h - 9, "text-anchor": "middle", class: "tick" }, s).textContent = l; });
+  const first = !App.drawn[host.id] && !REDUCED; App.drawn[host.id] = true;
+  const cols = [];
+  for (let i = 0; i < n; i++) {
+    const g = S("g", {}, s); cols.push(g); if (first) { g.setAttribute("class", "grow"); g.style.animationDelay = (i * 18) + "ms"; }
+    let base = 0; const segs = o.stacks.filter(function (st) { return st.values[i] > 0; });
+    segs.forEach(function (st, k) {
+      const v = st.values[i], y1 = Y(base + v), y0 = Y(base), isTop = k === segs.length - 1;
+      const hgt = Math.max(0, y0 - y1 - (k > 0 ? 2 : 0));
+      if (hgt > 0.3) S("path", { d: isTop ? barPath(X(i) - bw / 2, y1, bw, hgt, 3) : "M" + (X(i) - bw / 2) + "," + y1 + "h" + bw + "v" + hgt + "h" + (-bw) + "Z", fill: st.color }, g);
+      base += v;
+    });
+  }
+  if (o.line) {
+    const d = o.line.values.map(function (v, i) { return (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(v).toFixed(1); }).join("");
+    S("path", { d: d, fill: "none", stroke: o.line.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-dasharray": "5 4" }, s);
+  }
+  interact(s, n, X, function (i, cx, cy) {
+    cols.forEach(function (c, k) { c.setAttribute("opacity", k === i ? 1 : 0.45); });
+    showTip(cx, cy, o.tipTitle(i), o.tip(i));
+  }, function () { cols.forEach(function (c) { c.setAttribute("opacity", 1); }); hideTip(); });
+  s.setAttribute("role", "img"); s.setAttribute("aria-label", o.aria);
+}
+
+/* Diverging daily-change strip for the hero (up = cost rose = loss colour). */
+function stripChart(host, pts) {
+  const F = frame(host, 78), s = F.s, w = F.w, h = F.h, mid = h / 2, n = pts.length;
+  const maxAbs = Math.max.apply(null, pts.map(function (p) { return Math.abs(p.d); })) || 1, band = w / n, bw = Math.max(2, band - 3);
+  S("line", { x1: 0, x2: w, y1: mid, y2: mid, class: "base-line" }, s);
+  const first = !App.drawn[host.id] && !REDUCED; App.drawn[host.id] = true;
+  const bars = pts.map(function (p, i) {
+    const len = Math.max(2, Math.abs(p.d) / maxAbs * (mid - 3)), x = band * i + (band - bw) / 2;
+    const up = p.d >= 0, e = S("path", { d: up ? barPath(x, mid - len, bw, len, 3) : barPathDown(x, mid, bw, len, 3), fill: up ? cssv("--loss") : cssv("--gain"), opacity: 0.35 + 0.65 * Math.abs(p.d) / maxAbs }, s);
+    if (first) { e.setAttribute("class", "grow"); e.style.transformOrigin = up ? "bottom" : "top"; e.style.animationDelay = (i * 15) + "ms"; }
+    return e;
+  });
+  const label = function (p) { return shortDate(p.date) + " · " + smoney(p.d, 1) + "m (" + signed(p.pct, 2) + "%)"; };
+  interact(s, n, function (i) { return band * i + band / 2; }, function (i) {
+    bars.forEach(function (b, k) { b.style.opacity = k === i ? 1 : 0.2; }); $("stripNow").textContent = label(pts[i]);
+  }, function () { bars.forEach(function (b, k) { b.style.opacity = 0.35 + 0.65 * Math.abs(pts[k].d) / maxAbs; }); $("stripNow").textContent = "Daily change in cost to secure"; });
+  s.setAttribute("role", "img"); s.setAttribute("aria-label", "Daily change in the cost to secure over the last " + n + " curve days. " + pts.map(label).join("; "));
+}
+
+/* Semicircle gauge (coverage). */
+function gauge(host, value, label) {
+  clear(host); const t = Math.max(0, Math.min(1, value)), R = 70, len = Math.PI * R;
+  const s = S("svg", { width: 176, height: 116, viewBox: "0 0 176 116", role: "img", "aria-label": label }, host);
+  S("path", { d: "M 18 94 A 70 70 0 0 1 158 94", fill: "none", stroke: cssv("--accent-soft"), "stroke-width": 12, "stroke-linecap": "round" }, s);
+  const arc = S("path", { d: "M 18 94 A 70 70 0 0 1 158 94", fill: "none", stroke: cssv("--accent"), "stroke-width": 12, "stroke-linecap": "round", "stroke-dasharray": len, "stroke-dashoffset": REDUCED ? len * (1 - t) : len }, s);
+  arc.style.transition = "stroke-dashoffset 1.1s cubic-bezier(.22,1,.36,1)";
+  const g = S("g", {}, s); g.style.transformOrigin = "88px 94px"; g.style.transition = "transform 1.1s cubic-bezier(.22,1,.36,1)"; g.style.transform = "rotate(-90deg)";
+  S("line", { x1: 88, y1: 94, x2: 88, y2: 40, stroke: cssv("--fg"), "stroke-width": 2.5, "stroke-linecap": "round" }, g);
+  S("circle", { cx: 88, cy: 94, r: 5, fill: cssv("--fg") }, s);
+  S("text", { x: 18, y: 112, "text-anchor": "middle", class: "tick", style: "fill:var(--muted);font:11px var(--mono)" }, s).textContent = "0%";
+  S("text", { x: 158, y: 112, "text-anchor": "middle", class: "tick", style: "fill:var(--muted);font:11px var(--mono)" }, s).textContent = "100%";
+  requestAnimationFrame(function () { requestAnimationFrame(function () { arc.setAttribute("stroke-dashoffset", len * (1 - t)); g.style.transform = "rotate(" + (-90 + t * 180) + "deg)"; }); });
+  const v = el("div", fmt(value * 100, 1) + "%", "big"); v.style.fontSize = "36px"; v.style.marginTop = "8px"; host.appendChild(v);
+}
+
+/* Count-up for the hero figure. */
+function countTo(node, from, to, fmtFn) {
+  if (REDUCED || from === to) { node.textContent = fmtFn(to); return; }
+  const t0 = performance.now(), dur = from === null ? 1200 : 600, a = from === null ? 0 : from;
+  const tick = function (now) { const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 4); node.textContent = fmtFn(a + (to - a) * e); if (p < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}
+
+/* ---------------- main render ---------------- */
 function isDefault(st) { const dflt = App.data.portfolio.default_strategy; return st.cats.debt && st.cats.lease && st.cats.pens && st.strategy === dflt; }
+function costHistory(st) {
+  const d = App.data, ds = d.curve.dates, i0 = ds.indexOf(App.summary.as_of), out = [];
+  for (let i = Math.max(0, i0 - 30); i <= i0; i++) { const y = E.curveYields(d, ds[i]); if (!y) continue; out.push({ date: ds[i], pv: E.dot(E.schedule(d, ds[i], st.cats).cf, E.bootstrap(d.curve.years, y)) }); }
+  return out.slice(1).map(function (p, k) { const prev = out[k].pv; return { date: p.date, d: p.pv - prev, pct: (p.pv / prev - 1) * 100 }; });
+}
 
 function update() {
   const st = App.state, d = App.data, s = App.summary;
   if (App.blocked) return;
   const R = E.compute(d, s.as_of, App.y0, st);
-  const kp = $("kpis"); clear(kp);
   const alerts = $("alerts"); Array.prototype.slice.call(alerts.querySelectorAll(".dyn")).forEach(function (n) { alerts.removeChild(n); });
-  if (R.empty) {
-    $("headline").textContent = "No obligation category is selected. Tick at least one category.";
-    ["t1", "t2", "t3", "t4"].forEach(function (i) { clear($(i)); });
-    ["c1", "c2", "c3"].forEach(function (c) { if (App.charts[c]) { App.charts[c].destroy(); delete App.charts[c]; } });
-    return;
-  }
+  document.body.classList.toggle("is-empty", !!R.empty);
+  if (R.empty) { $("heroValue").textContent = "—"; $("heroDelta").textContent = ""; $("headline").textContent = "No obligation category is selected. Select at least one category."; App.heroShown = null; return; }
   App.R = R;
-  const S = R.strat[st.strategy];
-  // headline
-  const hl = $("headline"); clear(hl);
-  hl.appendChild(document.createTextNode(E.headline(R, st)));
-  const gapNote = "Gap: when all rates rise 1 bp the portfolio loses (negative) or gains (positive) this much more than the obligations.";
-  hl.appendChild(el("span", (isDefault(st) ? "Default view (all categories, " + STRAT_SHORT[d.portfolio.default_strategy] + "), curve of " + s.as_of + ". " : "Your selection, curve of " + s.as_of + ". ") + gapNote, "badge"));
-  // KPIs
+  R.flags.forEach(function (f) { alerts.appendChild(el("div", f, "alert warn dyn")); });
+  const S_ = R.strat[st.strategy];
   const pvM = E.dot(E.schedule(d, s.as_of, st.cats).cf, E.bootstrap(d.curve.years, App.yM));
-  const tr = E.trend;
-  const K = [
-    ["Cost to secure obligations", "$" + fmt(R.pv / 1000, 1) + "bn", "USD " + fmt(R.pv, 1) + " million; " + tr(R.pv, pvM) + " versus " + d.curve.ref_dates.month_earlier],
-    ["Coverage ratio", fmt(R.cov * 100, 1) + "%", "Liquid assets USD " + fmt(R.liquid, 1) + " million (cash and equivalents); " + tr(R.cov, R.liquid / pvM) + " versus " + d.curve.ref_dates.month_earlier],
-    ["Obligations DV01", dsgn(R.dv01, 2) + "m per bp", "Value change if all rates rise 0.01 percentage points; duration " + fmt(R.dur, 2) + " years"],
-    [STRAT_SHORT[st.strategy] + " DV01 gap", S ? dsgn(S.gap, 2) + "m per bp" : "n/a", S ? (Math.abs(S.gap) < 0.005 && st.strategy !== "cfm" ? "Total DV01 matched by construction; bucket gaps remain (View 3), so a change in the shape of the curve can still open a gap" : "Portfolio DV01 minus obligations DV01. Negative: the portfolio loses more than the obligations when rates rise 1 bp") : "Custom weights must sum to 100%"]
-  ];
-  K.forEach(function (k) { const c = el("div", null, "kpi"); c.appendChild(el("div", k[0], "l")); c.appendChild(el("div", k[1], "v")); c.appendChild(el("div", k[2], "s")); kp.appendChild(c); });
-  R.flags.forEach(function (f) { const w = el("div", f, "warn dyn"); alerts.appendChild(w); });
-  // View 1
-  const c = d.curve, i0 = c.dates.indexOf(s.as_of), iM = c.dates.indexOf(c.ref_dates.month_earlier), iY = c.dates.indexOf(c.ref_dates.year_earlier);
-  const ser = function (i) { return c.tenors.map(function (t) { const v = c.yields_pct[t][i]; return typeof v === "number" ? v : null; }); };
-  $("v1note").textContent = "Par yields in percent. 10 Yr today: " + fmt(c.yields_pct["10 Yr"][i0], 2) + "%; 30 Yr minus 2 Yr: " + fmt(c.yields_pct["30 Yr"][i0] - c.yields_pct["2 Yr"][i0], 2) + " percentage points. Source: US Department of the Treasury.";
-  setChart("c1", { type: "line", data: { labels: c.tenors, datasets: [
-    { label: "Today (" + s.as_of + ")", data: ser(i0), borderColor: PAL[0], backgroundColor: PAL[0], borderWidth: 3, pointStyle: "circle", tension: 0 },
-    { label: "One month earlier (" + c.dates[iM] + ")", data: ser(iM), borderColor: PAL[1], backgroundColor: PAL[1], borderDash: [6, 4], pointStyle: "rect", tension: 0 },
-    { label: "One year earlier (" + c.dates[iY] + ")", data: ser(iY), borderColor: PAL[3], backgroundColor: PAL[3], borderDash: [2, 3], pointStyle: "triangle", tension: 0 }] },
-    options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: "Maturity (tenor)" } }, y: { title: { display: true, text: "Par yield (percent)" } } }, plugins: { legend: { position: "bottom" } } } });
-  clear($("t1")); $("t1").appendChild(table(["Tenor", "Today (%)", "One month earlier (%)", "One year earlier (%)"], c.tenors.map(function (t, k) { return [t, fmt(ser(i0)[k], 2), fmt(ser(iM)[k], 2), fmt(ser(iY)[k], 2)]; })));
-  // View 2
-  const yrsL = R.sch.rows.map(function (r) { return String(r.year); });
-  const pvc = function (key) { return R.sch.rows.map(function (r) { return r[key] * r.alloc.reduce(function (a, w) { return a + w[1] * R.DF[w[0]]; }, 0); }); };
-  const tot = R.sch.rows.map(function (r) { return r.debt + r.lease + r.pens; });
-  $("v2note").textContent = "USD millions. Bars: present value by category (nominal payment times discount factor). Line: nominal payments. Payments fall in the middle of each year, counted from the curve date (the schedule is moved forward by " + fmt(R.sch.e, 2) + " years; payments already due, mostly in year 1, have no present value); amounts after year 5 are spread evenly (debt and leases to year " + d.obligations.spread.debt_and_lease_after_year5_until_year + ", pensions to year " + d.obligations.spread.pension_after_year5_until_year + "). This spreading rule is an assumption.";
-  const ds = []; CAT.forEach(function (cat, k) { if (st.cats[cat[0]]) ds.push({ type: "bar", label: "PV " + cat[1], data: pvc(cat[0]), backgroundColor: PAL[k], stack: "pv", order: 2 }); });
-  ds.push({ type: "line", label: "Nominal total", data: tot, borderColor: PAL[4], backgroundColor: PAL[4], borderWidth: 2, pointRadius: 2, order: 1 });
-  setChart("c2", { data: { labels: yrsL, datasets: ds }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, title: { display: true, text: "Year of the 10-K payment schedule" } }, y: { stacked: true, beginAtZero: true, title: { display: true, text: "USD millions" } } }, plugins: { legend: { position: "bottom" } } } });
-  clear($("t2")); $("t2").appendChild(table(["Year", "Nominal debt", "Nominal leases", "Nominal pensions", "PV total"], R.sch.rows.map(function (r, k) { return [String(r.year), fmt(r.debt, 1), fmt(r.lease, 1), fmt(r.pens, 1), fmt(pvc("debt")[k] + pvc("lease")[k] + pvc("pens")[k], 1)]; })));
-  // View 3
-  $("v3note").textContent = "Value lost per +1 basis point in each maturity bucket, USD millions (the table shows signed values). Obligations versus the " + STRAT_SHORT[st.strategy] + " portfolio, bought at par for the same cost. Equal bars in every bucket mean no hole opens when that part of the curve moves.";
-  const portB = S ? S.b : [null, null, null];
-  setChart("c3", { type: "bar", data: { labels: BUCKETS, datasets: [
-    { label: "Obligations", data: R.bdv01.map(function (x) { return -x; }), backgroundColor: PAL[0] },
-    { label: STRAT_SHORT[st.strategy] + " portfolio", data: portB.map(function (x) { return x === null ? null : -x; }), backgroundColor: PAL[1] }] },
-    options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: "Maturity bucket" } }, y: { beginAtZero: true, title: { display: true, text: "USD millions lost per +1 bp" } } }, plugins: { legend: { position: "bottom" } } } });
+  const ref = d.curve.ref_dates.month_earlier;
+
+  /* hero */
+  countTo($("heroValue"), App.heroShown, R.pv / 1000, function (v) { return "$" + fmt(v, 2) + "bn"; }); App.heroShown = R.pv / 1000;
+  const dpv = R.pv - pvM, hd = $("heroDelta"); clear(hd);
+  hd.appendChild(el("span", arrow(dpv, 0.05) + smoney(dpv, 1) + "m (" + signed((R.pv / pvM - 1) * 100, 2) + "%)", tone(dpv, false, 0.05)));
+  hd.appendChild(el("span", " vs " + shortDate(ref) + " · USD " + fmt(R.pv, 1) + " million", "muted"));
+  $("headline").textContent = E.headline(R, st);
+  clear($("heroInfo")); [
+    "The cost today of buying risk free US Treasuries that pay every listed obligation as it falls due (present value at the Treasury curve of " + s.as_of + "). Red means securing the payments became more expensive, green cheaper.",
+    (isDefault(st) ? "Default view (all categories, " + STRAT_SHORT[d.portfolio.default_strategy] + ")." : "Your selection.") + " Gap: when all rates rise 1 bp the portfolio loses (negative) or gains (positive) this much more than the obligations.",
+    "The bars show the daily change of the cost to secure over the last 30 curve days, recomputed with the same model for each day."
+  ].forEach(function (t) { $("heroInfo").appendChild(el("p", t)); });
+  const hist = costHistory(st);
+  if (hist.length) { stripChart($("strip"), hist); $("stripFrom").textContent = shortDate(hist[0].date); }
+
+  /* coverage */
+  gauge($("gauge"), R.cov, "Coverage ratio " + fmt(R.cov * 100, 1) + " percent");
+  const covM = R.liquid / pvM, dc = (R.cov - covM) * 100, cs = $("covSub"); clear(cs);
+  cs.appendChild(el("div", "Liquid assets $" + fmt(R.liquid / 1000, 2) + "bn · cash and equivalents"));
+  cs.appendChild(el("div", arrow(dc, 0.005) + signed(dc, 2) + " pp vs " + shortDate(ref), tone(dc, true, 0.005) || "muted"));
+
+  /* DV01 */
+  $("dvValue").textContent = money(R.dv01, 2) + "m"; $("dvValue").appendChild(el("span", "per bp", "unit"));
+  $("dvSub").textContent = "Duration " + fmt(R.dur, 2) + " years · value change if all rates rise 0.01 pp";
+  const totB = R.bdv01.reduce(function (a, b) { return a + Math.abs(b); }, 0) || 1, bar = $("dvBar"), lg = $("dvLegend"); clear(bar); clear(lg);
+  R.bdv01.forEach(function (v, k) { const sp = el("span"); sp.style.flexBasis = (Math.abs(v) / totB * 100) + "%"; sp.style.background = "var(--o" + (k + 1) + ")"; bar.appendChild(sp);
+    const li = el("span", null, "key"); const sw = el("span", null, "sw"); sw.style.background = "var(--o" + (k + 1) + ")"; li.appendChild(sw); li.appendChild(document.createTextNode(BUCKETS_SHORT[k])); li.appendChild(el("b", fmt(Math.abs(v) / totB * 100, 0) + "%")); lg.appendChild(li); });
+  bar.setAttribute("aria-label", "DV01 by bucket: " + R.bdv01.map(function (v, k) { return BUCKETS[k] + " " + money(v, 2) + "m"; }).join(", "));
+
+  /* gap */
+  $("gapTitle").textContent = STRAT_SHORT[st.strategy] + " portfolio · DV01 gap";
+  const gp = $("gapPill"), gc = $("gapCompare"); clear(gc);
+  if (S_) {
+    $("gapValue").textContent = money(S_.gap, 2) + "m"; $("gapValue").appendChild(el("span", "per bp", "unit"));
+    const ratio = Math.abs(S_.gap) / Math.abs(R.dv01);
+    const lvl = ratio < 0.01 ? ["ok", st.strategy === "cfm" ? "✓ Fully matched" : "✓ Total matched"] : ratio < 0.1 ? ["pending", "! Small mismatch"] : ["bad", "▲ Large mismatch"];
+    gp.className = "pill " + lvl[0]; gp.textContent = lvl[1];
+    $("gapSub").textContent = Math.abs(S_.gap) < 0.005 && st.strategy !== "cfm" ? "Total DV01 matched by construction; bucket gaps remain, so a change in the shape of the curve can still open a gap." : "Portfolio DV01 minus obligations DV01. Negative: the portfolio loses more than the obligations when rates rise 1 bp.";
+    const mx = Math.max(Math.abs(S_.dv01), Math.abs(R.dv01)) || 1;
+    [["Obligations", R.dv01, "var(--c1)"], ["Portfolio", S_.dv01, "var(--c2)"]].forEach(function (r) {
+      const row = el("div", null, "cmp-row"); row.appendChild(el("span", r[0])); const tr = el("div", null, "cmp-track"); const f = el("span"); f.style.width = (Math.abs(r[1]) / mx * 100) + "%"; f.style.background = r[2]; tr.appendChild(f); row.appendChild(tr); row.appendChild(el("b", money(r[1], 2))); gc.appendChild(row);
+    });
+  } else { $("gapValue").textContent = "n/a"; gp.className = "pill pending"; gp.textContent = "! Weights ≠ 100%"; $("gapSub").textContent = "Custom weights must sum to 100%."; }
+
+  /* View 3: bucket sensitivity */
+  $("v3note").textContent = "Value lost per +1 basis point in each maturity bucket, USD millions (the data table shows signed values and the gaps of every strategy). Obligations versus the " + STRAT_SHORT[st.strategy] + " portfolio, bought at par for the same cost. Equal columns in every bucket mean no hole opens when that part of the curve moves.";
+  const portB = S_ ? S_.b : [null, null, null];
+  groupedBars($("c3"), { groups: BUCKETS, shortGroups: BUCKETS_SHORT, height: 260, series: [{ name: "Obligations", values: R.bdv01.map(function (x) { return -x; }), color: cssv("--c1") }, { name: STRAT_SHORT[st.strategy] + " portfolio", values: portB.map(function (x) { return x === null ? null : -x; }), color: cssv("--c2") }],
+    yFmt: function (v) { return fmt(v, v < 10 ? 1 : 0); }, valFmt: function (v) { return fmt(v, 2); },
+    tip: function (i) { const rows = [{ color: cssv("--c1"), name: "Obligations", value: money(R.bdv01[i], 2) + "m" }]; if (S_) { rows.push({ color: cssv("--c2"), name: STRAT_SHORT[st.strategy], value: money(S_.b[i], 2) + "m" }); rows.push({ name: "Gap", value: smoney(S_.bgap[i], 2) + "m" }); } return rows; },
+    aria: "USD millions lost per plus one basis point by maturity bucket, obligations versus portfolio. Values in the data table." });
+  const k3 = $("c3keys"); clear(k3); [["Obligations", "--c1"], [STRAT_SHORT[st.strategy] + " portfolio", "--c2"]].forEach(function (x) { const k = el("span", null, "key"); const sw = el("span", null, "sw"); sw.style.background = cssv(x[1]); k.appendChild(sw); k.appendChild(document.createTextNode(x[0])); k3.appendChild(k); });
+  k3.appendChild(el("span", "USD millions lost per +1 bp", "key"));
   const rows3 = [["Obligations", fmt(R.bdv01[0], 2), fmt(R.bdv01[1], 2), fmt(R.bdv01[2], 2), fmt(R.dv01, 2), "-"]];
   STRAT.forEach(function (sx) { const Sx = R.strat[sx[0]]; rows3.push(Sx ? [STRAT_SHORT[sx[0]] + " (gap)", sgn(Sx.bgap[0], 2), sgn(Sx.bgap[1], 2), sgn(Sx.bgap[2], 2), sgn(Sx.gap, 2), fmt(R.pv, 1)] : [STRAT_SHORT[sx[0]] + " (gap)", "n/a", "n/a", "n/a", "n/a", "weights must sum to 100%"]); });
   clear($("t3")); $("t3").appendChild(table(["USD millions per bp", BUCKETS[0], BUCKETS[1], BUCKETS[2], "Total", "Cost"], rows3));
-  // View 4
-  const out = [];
+
+  /* View 1: yield curve */
+  const c = d.curve, i0 = c.dates.indexOf(s.as_of), iM = c.dates.indexOf(c.ref_dates.month_earlier), iY = c.dates.indexOf(c.ref_dates.year_earlier);
+  const ser = function (i) { return c.tenors.map(function (t) { const v = c.yields_pct[t][i]; return typeof v === "number" ? v : null; }); };
+  const y10 = c.yields_pct["10 Yr"][i0], y10m = c.yields_pct["10 Yr"][iM], spread = c.yields_pct["30 Yr"][i0] - c.yields_pct["2 Yr"][i0];
+  const ch = $("curveHead"); clear(ch);
+  [["10-year yield", fmt(y10, 2) + "%", signed((y10 - y10m) * 100, 0) + " bp vs " + shortDate(c.dates[iM])], ["30y − 2y spread", signed(spread, 2) + " pp", spread >= 0 ? "Upward sloping" : "Inverted"]].forEach(function (f) {
+    const b = el("div"); b.appendChild(el("div", f[0], "label")); b.appendChild(el("div", f[1], "big")); b.appendChild(el("div", f[2], "sub")); ch.appendChild(b); });
+  $("v1note").textContent = "Par yields in percent. Today's curve against the curve one month and one year earlier. Source: US Department of the Treasury.";
+  const curveSeries = [
+    { name: "Today (" + shortDate(s.as_of) + ")", values: ser(i0), color: cssv("--accent"), width: 2.5, area: true, markers: true },
+    { name: "1 month earlier (" + shortDate(c.dates[iM]) + ")", values: ser(iM), color: cssv("--g1"), dash: "6 4", dashKey: "dash" },
+    { name: "1 year earlier (" + shortDate(c.dates[iY]) + ")", values: ser(iY), color: cssv("--g2"), dash: "2 3", dashKey: "dot2" }];
+  lineChart($("c1"), { labels: c.tenors, series: curveSeries, height: 280, fill: true, yFmt: function (v) { return fmt(v, 1) + "%"; }, valFmt: function (v) { return fmt(v, 2) + "%"; }, tipTitle: function (i) { return c.tenors[i] + " par yield"; }, aria: "Yield curve: today, one month and one year earlier. Values in the data table." });
+  const k1 = $("c1keys"); clear(k1); curveSeries.forEach(function (sr) { const k = el("span", null, "key"); const l = el("span", null, "ln" + (sr.dashKey ? " " + sr.dashKey : "")); l.style.borderTopColor = sr.color; k.appendChild(l); k.appendChild(document.createTextNode(sr.name)); k1.appendChild(k); });
+  clear($("t1")); $("t1").appendChild(table(["Tenor", "Today (%)", "One month earlier (%)", "One year earlier (%)"], c.tenors.map(function (t, k) { return [t, fmt(ser(i0)[k], 2), fmt(ser(iM)[k], 2), fmt(ser(iY)[k], 2)]; })));
+
+  /* View 2: schedule */
+  const pvc = function (key) { return R.sch.rows.map(function (r) { return r[key] * r.alloc.reduce(function (a, w) { return a + w[1] * R.DF[w[0]]; }, 0); }); };
+  const pvD = pvc("debt"), pvL = pvc("lease"), pvP = pvc("pens"), tot = R.sch.rows.map(function (r) { return r.debt + r.lease + r.pens; });
+  const nomTot = tot.reduce(function (a, b) { return a + b; }, 0);
+  $("v2note").textContent = "USD millions. Columns: present value by category (nominal payment times discount factor). Dashed line: nominal payments. Payments fall in the middle of each year, counted from the curve date (the schedule is moved forward by " + fmt(R.sch.e, 2) + " years; payments already due, mostly in year 1, have no present value); amounts after year 5 are spread evenly (debt and leases to year " + d.obligations.spread.debt_and_lease_after_year5_until_year + ", pensions to year " + d.obligations.spread.pension_after_year5_until_year + "). This spreading rule is an assumption.";
+  const sh = $("schHead"); clear(sh);
+  [["Present value", "$" + fmt(R.pv / 1000, 2) + "bn"], ["Nominal payments", "$" + fmt(nomTot / 1000, 2) + "bn"], ["Discount", fmt((1 - R.pv / nomTot) * 100, 1) + "%"]].forEach(function (f) { const b = el("div"); b.appendChild(el("div", f[0], "label")); b.appendChild(el("div", f[1], "big")); sh.appendChild(b); });
+  const stacks = []; const pvBy = { debt: pvD, lease: pvL, pens: pvP };
+  CAT.forEach(function (ct) { if (st.cats[ct[0]]) stacks.push({ name: ct[1], values: pvBy[ct[0]], color: cssv(ct[2]) }); });
+  stackedColumns($("c2"), { labels: R.sch.rows.map(function (r) { return String(r.year); }), stacks: stacks, line: { name: "Nominal total", values: tot, color: cssv("--fg-2") }, height: 280,
+    yFmt: function (v) { return v >= 1000 ? fmt(v / 1000, 1) + "K" : fmt(v, 0); },
+    tipTitle: function (i) { return "Year " + R.sch.rows[i].year + " of the 10-K schedule"; },
+    tip: function (i) { const rows = stacks.map(function (sx) { return { color: sx.color, name: "PV " + sx.name.toLowerCase(), value: "$" + fmt(sx.values[i], 1) + "m" }; }); rows.push({ color: cssv("--fg-2"), line: true, dash: "dash", name: "Nominal total", value: "$" + fmt(tot[i], 1) + "m" }); return rows; },
+    aria: "Present value of obligations by year and category, with nominal payments. Values in the data table." });
+  const k2 = $("c2keys"); clear(k2); stacks.forEach(function (sx) { const k = el("span", null, "key"); const sw = el("span", null, "sw"); sw.style.background = sx.color; k.appendChild(sw); k.appendChild(document.createTextNode("PV " + sx.name.toLowerCase())); k2.appendChild(k); });
+  const kn = el("span", null, "key"); const ln = el("span", null, "ln dash"); ln.style.borderTopColor = cssv("--fg-2"); kn.appendChild(ln); kn.appendChild(document.createTextNode("Nominal payments")); k2.appendChild(kn);
+  clear($("t2")); $("t2").appendChild(table(["Year", "Nominal debt", "Nominal leases", "Nominal pensions", "PV total"], R.sch.rows.map(function (r, k) { return [String(r.year), fmt(r.debt, 1), fmt(r.lease, 1), fmt(r.pens, 1), fmt(pvD[k] + pvL[k] + pvP[k], 1)]; })));
+
+  /* View 4: scenarios */
   const scs = d.scenarios.concat([{ id: "custom", name: "Custom (your shocks)", kind: "custom", shocks: st.shocks, type: "user input" }]);
-  scs.forEach(function (sc) { out.push(E.runScenario(d, App.y0, R, sc)); });
-  App.scen = out;
+  const out = scs.map(function (sc) { return E.runScenario(d, App.y0, R, sc); }); App.scen = out;
   $("v4note").textContent = "Change in value in USD millions under a shocked curve (full repricing: the shocked par curve is bootstrapped again). Gap = portfolio change minus obligations change (a negative gap means the portfolio is worth less relative to the obligations in that scenario). Obligations change is the change in the cost to secure: positive means securing the payments became more expensive. First order = obligations DV01 times the shock, shown for parallel scenarios; the difference to full repricing is convexity. Predefined shocks are model assumptions; replays are the actual Treasury par yield changes between two dates applied to today's curve. Strategy shown: " + STRAT_SHORT[st.strategy] + ".";
-  const rows4 = out.map(function (r, k) {
-    if (r.invalid) return [r.name, "n/a (invalid or missing shock)", "n/a", "n/a", "n/a", ""];
+  const gaps = out.map(function (r) { const P = r[st.strategy]; return !r.invalid && P ? P.gap : null; }).filter(function (g) { return g !== null; });
+  const gmax = Math.max.apply(null, gaps.map(Math.abs).concat([1e-9]));
+  const worst = out.reduce(function (a, r) { const P = r[st.strategy]; return !r.invalid && P && (a === null || P.gap < a.gap) ? { name: r.name, gap: P.gap } : a; }, null);
+  const sch2 = $("scHead"); clear(sch2);
+  if (worst) { const b = el("div"); b.appendChild(el("div", "Largest shortfall · " + STRAT_SHORT[st.strategy], "label")); const v = el("div", smoney(worst.gap, 1) + "m", "big " + (worst.gap < 0 ? "loss" : "gain")); b.appendChild(v); b.appendChild(el("div", worst.name, "sub")); sch2.appendChild(b); }
+  const cell = function (x, goodUp) { if (x === null || x === undefined || !isFinite(x)) return "n/a"; const sp = el("span", signed(x, 1), tone(x, goodUp, 0.05)); return sp; };
+  const rows4 = out.map(function (r) {
+    const nm = el("div"); nm.appendChild(el("span", r.name, "sname")); nm.appendChild(el("span", (r.negative ? "negative yield after shock · " : "") + r.type, "stype"));
+    if (r.invalid) return [nm, "n/a (invalid or missing shock)", "n/a", "n/a", "n/a"];
     const P = r[st.strategy];
-    return [r.name, sgn(r.dObl, 1), P ? sgn(P.d, 1) : "n/a", P ? sgn(P.gap, 1) : "n/a", r.firstOrder !== undefined ? sgn(r.firstOrder, 1) : "-", (r.negative ? "negative yield after shock; " : "") + r.type];
+    let gapEl = "n/a";
+    if (P) { gapEl = el("div", null, "gapcell"); const db = el("div", null, "divbar"); const f = el("span"); const wd = Math.abs(P.gap) / gmax * 50; f.style.width = wd + "%"; f.style.left = (P.gap >= 0 ? 50 : 50 - wd) + "%"; f.style.background = P.gap >= 0 ? "var(--gain)" : "var(--loss)"; db.appendChild(f); gapEl.appendChild(db); gapEl.appendChild(cell(P.gap, true)); }
+    return [nm, cell(r.dObl, false), P ? cell(P.d, true) : "n/a", gapEl, r.firstOrder !== undefined ? sgn(r.firstOrder, 1) : "–"];
   });
-  clear($("t4")); $("t4").appendChild(table(["Scenario", "Obligations change", "Portfolio change", "Gap", "First order (obligations)", "Note"], rows4));
+  clear($("t4")); $("t4").appendChild(table(["Scenario", "Obligations change", "Portfolio change", "Gap (portfolio − obligations)", "First order"], rows4, "scen"));
 }
 
 function buildControls() {
   const st = App.state, d = App.data;
-  const cats = $("cats"); CAT.forEach(function (c) { const l = el("label"); const i = el("input"); i.type = "checkbox"; i.checked = st.cats[c[0]]; i.addEventListener("change", function () { st.cats[c[0]] = i.checked; update(); }); l.appendChild(i); l.appendChild(document.createTextNode(" " + c[1])); cats.appendChild(l); });
-  const sg = $("strategies"); STRAT.forEach(function (s) { const l = el("label"); const i = el("input"); i.type = "radio"; i.name = "strat"; i.value = s[0]; i.checked = st.strategy === s[0]; i.addEventListener("change", function () { st.strategy = s[0]; $("customBox").hidden = s[0] !== "custom"; update(); }); l.appendChild(i); l.appendChild(document.createTextNode(" " + s[1])); sg.appendChild(l); });
+  const cats = $("cats");
+  CAT.forEach(function (c) { const l = el("label"); const i = el("input"); i.type = "checkbox"; i.checked = st.cats[c[0]]; i.addEventListener("change", function () { st.cats[c[0]] = i.checked; update(); }); const sp = el("span"); const sw = el("span", null, "sw"); sw.style.background = "var(" + c[2] + ")"; sp.appendChild(sw); sp.appendChild(document.createTextNode(c[1])); l.appendChild(i); l.appendChild(sp); cats.appendChild(l); });
+  const sg = $("strategies");
+  STRAT.forEach(function (s) { const l = el("label"); const i = el("input"); i.type = "radio"; i.name = "strat"; i.value = s[0]; i.checked = st.strategy === s[0]; i.addEventListener("change", function () { st.strategy = s[0]; $("customBox").hidden = s[0] !== "custom"; update(); }); l.appendChild(i); l.appendChild(el("span", s[1])); if (s[0] === "cfm") l.title = "Cash flow matching (theoretical benchmark)"; sg.appendChild(l); });
   const sl = $("sliders"); const outs = [];
   d.curve.tenors.forEach(function (t, k) {
-    const row = el("div"); row.appendChild(el("span", t)); const r = el("input"); r.type = "range"; r.min = 0; r.max = 100; r.step = 1; r.value = st.custom[k]; r.setAttribute("aria-label", "Weight of " + t);
-    const o = el("span", st.custom[k] + "%"); o.style.minWidth = "3em"; r.addEventListener("input", function () { st.custom[k] = Number(r.value); o.textContent = r.value + "%"; wsum(); update(); }); row.appendChild(r); row.appendChild(o); sl.appendChild(row); outs.push([r, o]);
+    const row = el("div"); row.appendChild(el("span", t, "t")); const r = el("input"); r.type = "range"; r.min = 0; r.max = 100; r.step = 1; r.value = st.custom[k]; r.setAttribute("aria-label", "Weight of " + t);
+    const o = el("span", st.custom[k] + "%", "v"); r.addEventListener("input", function () { st.custom[k] = Number(r.value); o.textContent = r.value + "%"; wsum(); update(); }); row.appendChild(r); row.appendChild(o); sl.appendChild(row); outs.push([r, o]);
   });
-  function wsum() { const s = st.custom.reduce(function (a, b) { return a + b; }, 0); const w = $("wsum"); w.textContent = "Total: " + s + "%" + (s === 100 ? "" : " (must be 100%; Custom results are hidden until it is)"); }
+  function wsum() { const s = st.custom.reduce(function (a, b) { return a + b; }, 0); const w = $("wsum"); w.textContent = "Total " + s + "%" + (s === 100 ? "" : " · must be 100%; Custom results are hidden until it is"); w.className = "num " + (s === 100 ? "gain" : "warn"); }
   function setAll(arr) { arr.forEach(function (v, k) { st.custom[k] = v; outs[k][0].value = v; outs[k][1].textContent = v + "%"; }); wsum(); update(); }
   $("normBtn").addEventListener("click", function () { const s = st.custom.reduce(function (a, b) { return a + b; }, 0); if (s <= 0) return; const raw = st.custom.map(function (v) { return v / s * 100; }); const rd = raw.map(Math.floor); let rem = 100 - rd.reduce(function (a, b) { return a + b; }, 0); raw.map(function (v, k) { return [v - Math.floor(v), k]; }).sort(function (a, b) { return b[0] - a[0]; }).forEach(function (p) { if (rem > 0) { rd[p[1]]++; rem--; } }); setAll(rd); });
   $("resetBtn").addEventListener("click", function () { setAll(d.portfolio.custom_default_weights_pct.slice()); });
   wsum();
-  const sh = $("shocks"); d.curve.tenors.forEach(function (t, k) { const w = el("div"); w.appendChild(el("label", t + " (bp)")); const i = el("input"); i.type = "number"; i.step = "1"; i.value = st.shocks[k]; i.setAttribute("aria-label", "Custom shock in basis points for " + t); i.addEventListener("input", function () { st.shocks[k] = i.value === "" ? NaN : Number(i.value); update(); }); w.appendChild(i); sh.appendChild(w); });
+  const sh = $("shocks"); d.curve.tenors.forEach(function (t, k) { const w = el("div"); const id = "shock" + k; const lb = el("label", t + " (bp)"); lb.htmlFor = id; w.appendChild(lb); const i = el("input"); i.id = id; i.type = "number"; i.step = "1"; i.value = st.shocks[k]; i.setAttribute("aria-label", "Custom shock in basis points for " + t); i.addEventListener("input", function () { st.shocks[k] = i.value === "" ? NaN : Number(i.value); update(); }); w.appendChild(i); sh.appendChild(w); });
 }
 
-/* ---------------- "Data updates" section ----------------
-   Shows, for each of the last 10 Treasury business days, whether its curve was received and when, any later
-   corrections, the latest automatic checks (read live from the public GitHub API) and the "Check for new data now" button. */
+/* Generic toggles: "i" info buttons, "Data" panels, theme, history, about. */
+function wireUi() {
+  document.querySelectorAll("[data-info]").forEach(function (b) { const p = $(b.getAttribute("data-info")); b.setAttribute("aria-expanded", "false"); b.setAttribute("aria-controls", p.id); b.addEventListener("click", function () { const open = !p.classList.contains("open"); p.classList.toggle("open", open); b.setAttribute("aria-expanded", String(open)); }); });
+  document.querySelectorAll("[data-panel]").forEach(function (b) { const p = $(b.getAttribute("data-panel")); b.setAttribute("aria-controls", p.id); b.addEventListener("click", function () { const open = !p.classList.contains("open"); p.classList.toggle("open", open); b.setAttribute("aria-expanded", String(open)); }); });
+  const setTheme = function (t) { document.documentElement.setAttribute("data-theme", t); $("themeLabel").textContent = t === "dark" ? "Light" : "Dark"; try { localStorage.setItem("adfh-theme", t); } catch (e) {} };
+  $("themeLabel").textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "Light" : "Dark";
+  $("themeBtn").addEventListener("click", function () { setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"); App.drawn = {}; if (!App.blocked) update(); });
+  const hist = $("history"), hb = $("historyBtn");
+  const setHist = function (open) { hist.hidden = !open; hb.setAttribute("aria-expanded", String(open)); hb.textContent = open ? "Hide update history ‹" : "Update history ›"; if (open) hist.scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "nearest" }); };
+  hb.addEventListener("click", function () { setHist(hist.hidden); }); $("historyClose").addEventListener("click", function () { setHist(false); hb.focus(); });
+  const ab = $("about"), at = $("aboutToggle");
+  const setAbout = function (open) { ab.classList.toggle("open", open); at.setAttribute("aria-expanded", String(open)); };
+  at.addEventListener("click", function () { setAbout(!ab.classList.contains("open")); });
+  $("aboutBtn").addEventListener("click", function () { setAbout(true); $("aboutTile").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "start" }); });
+  let rt = null; let lastW = window.innerWidth;
+  window.addEventListener("resize", function () { if (Math.abs(window.innerWidth - lastW) < 2) return; lastW = window.innerWidth; clearTimeout(rt); rt = setTimeout(function () { if (!App.blocked && App.state) { App.drawn = { c1: 1, c2: 1, c3: 1, strip: 1 }; update(); } }, 150); });
+  document.addEventListener("scroll", hideTip, { passive: true });
+}
+
 const AUTO = {
   repo: "giodiri12/progetto-fintech-adfh",
   workflow: "update-curve.yml",
@@ -297,40 +880,25 @@ function runResult(run, bot) {
   return c ? { cls: "ok", text: "New data saved: " + c.title.replace(/^Treasury curve update: /, "curve ").replace(/^Treasury curve /, ""), commit: c } : { cls: "ok", text: "Completed: no new data" };
 }
 
+/* Builds the "Treasury data feed" tile (top of the page) and its "Update history" panel. */
 function buildUpdates(summary, data) {
   UPD.summary = summary; UPD.data = data;
-  const u = $("updates"); clear(u);
-  u.appendChild(el("h2", "Data updates"));
-  u.appendChild(el("div", null, "upd-banner")).id = "upd-banner";
-  const bar = el("div", null, "upd-bar");
-  const btn = el("button", "Check for new data now"); btn.type = "button"; btn.id = "checkBtn"; btn.addEventListener("click", checkNow);
-  bar.appendChild(btn); const msg = el("span", "", "small"); msg.id = "checkMsg"; msg.setAttribute("aria-live", "polite"); bar.appendChild(msg);
-  u.appendChild(bar);
-  u.appendChild(el("p", "Use the button only if today's curve is missing: it runs the same automatic check immediately (same sources, same validation). The result appears below in about 1 to 2 minutes.", "small"));
-  u.appendChild(el("h3", "Last 10 Treasury business days"));
-  const days = el("div", null, "tablewrap"); days.id = "upd-days"; u.appendChild(days);
-  u.appendChild(el("h3", "Recent checks"));
-  const runs = el("div", null, "tablewrap"); runs.id = "upd-runs"; runs.appendChild(el("p", "Loading the latest checks from GitHub…", "small")); u.appendChild(runs);
-  const au = data.meta.auto_update || {};
-  const how = el("details"); how.appendChild(el("summary", "How the automatic update works"));
+  $("checkBtn").addEventListener("click", checkNow);
+  const au = data.meta.auto_update || {}, how = $("how");
   ["The Treasury par yield curve is downloaded automatically every day, with no manual step, from the Treasury's official CSV and XML data feeds.",
    "A new day is saved only if both feeds agree on every value and all checks pass: 10 tenors present, numeric, in percent, plausible range, business day, no duplicates, no extreme daily jump.",
    "At every check the last 10 stored days are compared again with the feeds; corrections published by the Treasury are applied and shown in the table above.",
    "If any check fails, nothing is changed: the page keeps the last valid curve and shows the stale data warning.",
    "The Treasury normally publishes the curve by about 6 PM New York time on business days. Scheduled checks: " + (au.schedule_utc || ["23:10", "00:40", "04:10"]).join(", ") + " UTC" + (au.schedule_note ? " (" + au.schedule_note + ")" : "") + ".",
-   "The company's obligations come from its annual 10-K filing and are updated manually once a year."].forEach(function (t) { how.appendChild(el("p", t, "small")); });
-  const lk = el("p", null, "small"); const a = el("a", "Full history of checks on GitHub"); a.href = RUNS_PAGE; a.target = "_blank"; a.rel = "noopener"; lk.appendChild(a); how.appendChild(lk);
-  u.appendChild(how);
+   "The button \"Check for new data now\" runs the same check immediately (same sources, same validation); use it only if today's curve is missing. At most one check every 5 minutes.",
+   "The company's obligations come from its annual 10-K filing and are updated manually once a year."].forEach(function (t) { how.appendChild(el("p", t)); });
+  const lk = el("p"); const a = el("a", "Full history of checks on GitHub"); a.href = RUNS_PAGE; a.target = "_blank"; a.rel = "noopener"; lk.appendChild(a); how.appendChild(lk);
   renderUpdateStatus();
   refreshActivity();
 }
-function refreshActivity() {
-  return loadActivity().then(function (act) { UPD.activity = act; renderUpdateStatus(); renderRuns(); return act; })
-    .catch(function (e) { const r = $("upd-runs"); clear(r); r.appendChild(el("p", "The list of recent checks could not be loaded from GitHub (" + e.message + "). The table above still shows what this page's data contains.", "small")); });
-}
 
 function renderUpdateStatus() {
-  const s = UPD.summary, d = UPD.data, log = d.meta.update_log || [], stored = new Set(d.curve.dates), act = UPD.activity;
+  const d = UPD.data, log = d.meta.update_log || [], stored = new Set(d.curve.dates), act = UPD.activity;
   const lastStored = d.curve.dates[d.curve.dates.length - 1];
   const runs = act ? act.runs : [], lastRun = runs.find(function (r) { return r.status === "completed"; });
   const nextRun = nextScheduled((d.meta.auto_update || {}).schedule_utc || ["23:10", "00:40", "04:10"]);
@@ -355,50 +923,52 @@ function renderUpdateStatus() {
     } else if (Date.now() < nyEvening(day).getTime() + 2.5 * 3600000) {
       st = stat("muted", "Due at the next check"); note = "The Treasury normally publishes around now; " + (nextRun ? "next scheduled check " + when(nextRun.toISOString()) + "." : "the next scheduled check will save it.");
     } else {
-      st = stat("pending", "⚠ Not received yet"); pendingDay = pendingDay || day;
+      st = stat("pending", "! Not received yet"); pendingDay = pendingDay || day;
       note = (lastRun ? "Last check " + when(lastRun.updated_at) + ". " : "") + (nextRun ? "Next scheduled check " + when(nextRun.toISOString()) + ". " : "") + "On US market holidays no curve is published.";
     }
     return [dayLabel(day), st, at, note];
   });
-  const t = el("table"), th = el("thead"), tr = el("tr");
-  ["Business day (New York)", "Status", "Saved on this site", "Notes"].forEach(function (h) { tr.appendChild(el("th", h)); }); th.appendChild(tr); t.appendChild(th);
-  const tb = el("tbody"); rows.forEach(function (r) { const row = el("tr"); r.forEach(function (c) { const td = el("td"); if (typeof c === "string") td.textContent = c; else td.appendChild(c); row.appendChild(td); }); tb.appendChild(row); }); t.appendChild(tb);
-  t.className = "upd-table";
-  const dz = $("upd-days"); clear(dz); dz.appendChild(t);
-  // banner
-  const b = $("upd-banner"); clear(b); b.className = "upd-banner";
+  const dz = $("upd-days"); clear(dz); dz.appendChild(table(["Business day (New York)", "Status", "Saved on this site", "Notes"], rows, "txt"));
+
+  // overall state
   const failed = lastRun && lastRun.conclusion !== "success" && lastRun.conclusion !== "cancelled";
   const newer = act && act.bot.length && (!log.length || Date.parse(act.bot[0].time) > Date.parse(log[0].time_utc) + 120000) && act.bot[0];
-  let cls, head;
-  if (failed) { cls = "bad"; head = "✗ The last check (" + when(lastRun.updated_at) + ") failed. No data was changed: the page shows the last valid curve (" + dayLabel(lastStored) + ")."; }
-  else if (pendingDay) { cls = "pending"; head = "⚠ Waiting for the curve of " + dayLabel(pendingDay) + ". The latest curve on this site is " + dayLabel(lastStored) + "."; }
-  else { cls = "ok"; head = "✓ Up to date. Latest Treasury curve: " + dayLabel(lastStored) + (received[lastStored] ? ", saved " + when(received[lastStored]) : "") + "."; }
-  b.classList.add("upd-" + cls); b.appendChild(el("div", head, "upd-head"));
+  let cls, head, short;
+  if (failed) { cls = "bad"; short = "Check failed"; head = "✕ The last check (" + when(lastRun.updated_at) + ") failed. No data was changed: the page shows the last valid curve."; }
+  else if (pendingDay) { cls = "pending"; short = "Waiting"; head = "! Waiting for the curve of " + dayLabel(pendingDay) + "."; }
+  else { cls = "ok"; short = "Up to date"; head = "✓ Up to date"; }
+  $("statusDot").className = "dot " + cls; $("statusText").textContent = short + " · curve " + shortDate(lastStored);
+  const fp = $("feedPill"); fp.className = "pill " + cls; fp.textContent = short;
+  const fs = $("feedStatus"); clear(fs); fs.appendChild(el("span", head, "st st-" + cls));
+  $("feedDate").textContent = new Date(lastStored + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  $("feedSaved").textContent = received[lastStored] ? "Saved " + when(received[lastStored]) : "Loaded before automatic updates started";
+  $("feedLast").textContent = lastRun ? when(lastRun.updated_at) + " · " + runResult(lastRun, act.bot).text.toLowerCase().replace(/^completed: /, "") : (act ? "none yet" : "loading…");
+  $("feedNext").textContent = nextRun ? when(nextRun.toISOString()) : "—";
+
+  // banner inside the history panel
+  const b = $("updBanner"); clear(b);
   const parts = [];
   if (lastRun) parts.push("Last check: " + when(lastRun.updated_at) + " (" + runResult(lastRun, act.bot).text.toLowerCase() + ").");
-  else if (!act) parts.push("Loading the latest checks…");
   if (nextRun) parts.push("Next scheduled check: " + when(nextRun.toISOString()) + ".");
   if (firstAuto) parts.push("Automatic updates since " + localTime(firstAuto) + ".");
-  b.appendChild(el("div", parts.join(" "), "small"));
+  b.appendChild(el("p", parts.join(" "), "muted"));
   if (failed) { const a = el("a", "See what went wrong on GitHub"); a.href = lastRun.html_url; a.target = "_blank"; a.rel = "noopener"; b.appendChild(a); }
-  if (newer) { const p = el("div", "A newer data file was saved " + when(newer.time) + " (" + newer.title + "). ", "small"); const a = el("a", "Reload the page"); a.href = "#"; a.addEventListener("click", function (e) { e.preventDefault(); location.reload(); }); p.appendChild(a); b.appendChild(p); }
+  if (newer) { const p = el("div", "A newer data file was saved " + when(newer.time) + " (" + newer.title + "). ", "alert warn"); const a = el("a", "Reload the page"); a.href = "#"; a.addEventListener("click", function (e) { e.preventDefault(); location.reload(); }); p.appendChild(a); b.appendChild(p);
+    if (!document.querySelector("#alerts .newer")) { const top = el("div", "A newer Treasury curve was saved " + when(newer.time) + ". ", "alert warn newer"); const a2 = el("a", "Reload the page"); a2.href = "#"; a2.addEventListener("click", function (e) { e.preventDefault(); location.reload(); }); top.appendChild(a2); $("alerts").appendChild(top); } }
 }
 
 function renderRuns() {
   const act = UPD.activity, r = $("upd-runs"); clear(r);
-  if (!act.runs.length) { r.appendChild(el("p", "No check has run yet.", "small")); return; }
-  const t = el("table"), th = el("thead"), tr = el("tr");
-  ["Check time (your time zone)", "Type", "Result", ""].forEach(function (h) { tr.appendChild(el("th", h)); }); th.appendChild(tr); t.appendChild(th);
-  const tb = el("tbody");
-  act.runs.slice(0, 10).forEach(function (run) {
-    const res = runResult(run, act.bot), row = el("tr");
-    row.appendChild(el("td", when(run.run_started_at || run.created_at)));
-    row.appendChild(el("td", runKind(run)));
-    const td = el("td"); td.appendChild(stat(res.cls, res.text)); row.appendChild(td);
-    const tl = el("td"); const a = el("a", "details"); a.href = run.html_url; a.target = "_blank"; a.rel = "noopener"; tl.appendChild(a); row.appendChild(tl);
-    tb.appendChild(row);
-  });
-  t.appendChild(tb); t.className = "upd-table"; r.appendChild(t);
+  if (!act.runs.length) { r.appendChild(el("p", "No check has run yet.", "muted")); return; }
+  r.appendChild(table(["Check time (your time zone)", "Type", "Result", ""], act.runs.slice(0, 10).map(function (run) {
+    const res = runResult(run, act.bot), a = el("a", "details"); a.href = run.html_url; a.target = "_blank"; a.rel = "noopener";
+    return [when(run.run_started_at || run.created_at), runKind(run), stat(res.cls, res.text), a];
+  }), "txt"));
+}
+
+function refreshActivity() {
+  return loadActivity().then(function (act) { UPD.activity = act; renderUpdateStatus(); renderRuns(); return act; })
+    .catch(function (e) { const r = $("upd-runs"); clear(r); r.appendChild(el("p", "The list of recent checks could not be loaded from GitHub (" + e.message + "). The table above still shows what this page's data contains.", "small")); });
 }
 
 /* ---------------- "Check for new data now" ---------------- */
@@ -503,21 +1073,23 @@ function render(summary, data) {
   $("title").textContent = summary.title; $("question").textContent = summary.question;
   const o = data.obligations, now = new Date();
   const lastLog = (data.meta.update_log || [])[0];
-  const dates = $("dates"); [["Curve as of", summary.as_of], ["Obligations: fiscal year ended", o.fiscal_year_end + " (" + o.company + ")"], ["Data file saved", data.meta.generated], ["Last automatic update", lastLog ? localTime(lastLog.time_utc) : "none yet"]].forEach(function (p) { const s = el("span"); s.appendChild(document.createTextNode(p[0] + " ")); s.appendChild(el("b", p[1])); dates.appendChild(s); });
+  const dates = $("dates");
+  [["Curve as of", summary.as_of], ["Obligations: fiscal year ended", o.fiscal_year_end + " · " + o.company], ["Data file saved", data.meta.generated], ["Last automatic update", lastLog ? localTime(lastLog.time_utc) : "none yet"]].forEach(function (p) { const s = el("span", null, "chip"); s.appendChild(document.createTextNode(p[0] + " ")); s.appendChild(el("b", p[1])); dates.appendChild(s); });
+  wireUi();
   const errs = E.validate(summary, data);
   buildUpdates(summary, data);
   buildAbout(summary, data, errs.length === 0);
   if (errs.length) {
-    App.blocked = true;
-    errs.forEach(function (e) { $("alerts").appendChild(el("div", "Cannot compute the affected outputs: " + e, "err")); });
+    App.blocked = true; document.body.classList.add("is-empty");
+    errs.forEach(function (e) { $("alerts").appendChild(el("div", "Cannot compute the affected outputs: " + e, "alert err")); });
     $("headline").textContent = "Outputs are not shown because the input data failed validation. Nothing has been replaced by zero.";
     return;
   }
   const bd = bizDays(summary.as_of, now), mo = monthsBetween(o.fiscal_year_end, now);
-  if (bd > data.meta.stale_rules.curve_business_days) $("alerts").appendChild(el("div", "Stale curve: the Treasury curve is " + bd + " business days old (limit " + data.meta.stale_rules.curve_business_days + ").", "warn"));
-  if (mo > data.meta.stale_rules.fiscal_year_months) $("alerts").appendChild(el("div", "Stale obligations: the fiscal year end is " + mo + " months old (limit " + data.meta.stale_rules.fiscal_year_months + ").", "warn"));
+  if (bd > data.meta.stale_rules.curve_business_days) $("alerts").appendChild(el("div", "Stale curve: the Treasury curve is " + bd + " business days old (limit " + data.meta.stale_rules.curve_business_days + ").", "alert warn"));
+  if (mo > data.meta.stale_rules.fiscal_year_months) $("alerts").appendChild(el("div", "Stale obligations: the fiscal year end is " + mo + " months old (limit " + data.meta.stale_rules.fiscal_year_months + ").", "alert warn"));
   App.y0 = E.curveYields(data, summary.as_of); App.yM = E.curveYields(data, data.curve.ref_dates.month_earlier);
-  if (!App.yM) { App.yM = App.y0; $("alerts").appendChild(el("div", "The one month earlier curve is missing a value; trend labels compare with today.", "warn")); }
+  if (!App.yM) { App.yM = App.y0; $("alerts").appendChild(el("div", "The one month earlier curve is missing a value; trend labels compare with today.", "alert warn")); }
   App.state = { cats: { debt: true, lease: true, pens: true }, strategy: data.portfolio.default_strategy, custom: data.portfolio.custom_default_weights_pct.slice(), shocks: data.curve.tenors.map(function () { return 0; }) };
   buildControls();
   update();
