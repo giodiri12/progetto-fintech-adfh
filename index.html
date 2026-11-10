@@ -80,7 +80,13 @@ button, input { font: inherit; color: inherit; }
 .btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
 .btn:disabled { opacity: .55; cursor: progress; }
 .icon-btn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: transparent; display: inline-grid; place-items: center; cursor: pointer; color: var(--muted); padding: 0; }
-.icon-btn:hover, .icon-btn[aria-expanded="true"] { color: var(--fg); border-color: var(--border-2); background: var(--hover); }
+.icon-btn:hover { color: var(--fg); border-color: var(--border-2); background: var(--hover); }
+/* Open / closed state of every toggle button: the open state must be visible at a glance. */
+.icon-btn[aria-expanded="true"], .icon-btn[aria-expanded="true"]:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn[aria-expanded]::after { content: ""; width: 6px; height: 6px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: translateY(-2px) rotate(45deg); margin-left: 3px; transition: transform .2s; }
+.btn[aria-expanded="true"], .btn[aria-expanded="true"]:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.btn[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
+:root[data-theme="dark"] .btn[aria-expanded="true"] { color: #8fbcf3; }
 .meta { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0 4px 14px; }
 .meta .chip b { color: var(--fg); font-weight: 600; }
 
@@ -133,6 +139,7 @@ body.is-empty .needs-data { display: none !important; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-size: 12px; color: var(--fg-2); }
 #checkMsg { display: block; min-height: 18px; margin-top: 8px; font-size: 12px; }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; font-weight: 550; margin-top: 10px; align-self: flex-start; }
+.linkbtn[aria-expanded="true"] { text-decoration: underline; text-underline-offset: 3px; }
 .status-line { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
 
 /* controls */
@@ -147,10 +154,13 @@ body.is-empty .needs-data { display: none !important; }
 .seg input:checked + span { background: var(--fg); color: var(--bg); }
 .seg input:focus-visible + span, .chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.chips label > span { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border-2); border-radius: 999px; padding: 5px 12px 5px 9px; font-size: 12px; font-weight: 550; color: var(--muted); transition: all .15s; }
-.chips label > span .sw { opacity: .35; }
-.chips input:checked + span { color: var(--fg); background: var(--card-2); }
+.chips label > span { display: inline-flex; align-items: center; gap: 7px; border: 1px dashed var(--border-2); border-radius: 999px; padding: 5px 12px 5px 9px; font-size: 12px; font-weight: 550; color: var(--muted); background: transparent; transition: all .15s; }
+.chips label > span .sw { opacity: .3; }
+.chips label > span::after { content: "+"; font-family: var(--mono); font-size: 12px; margin-left: 1px; color: var(--muted); }
+.chips label:hover > span { color: var(--fg); }
+.chips input:checked + span { color: var(--fg); background: var(--accent-soft); border: 1px solid var(--accent); }
 .chips input:checked + span .sw { opacity: 1; }
+.chips input:checked + span::after { content: "✓"; color: var(--accent); }
 
 /* holdings */
 .hold-method { font-size: 12.5px; color: var(--fg-2); margin: 0 0 12px; max-width: 110ch; }
