@@ -151,13 +151,14 @@ body.is-empty .needs-data { display: none !important; }
 .chips label > span .sw { opacity: .35; }
 .chips input:checked + span { color: var(--fg); background: var(--card-2); }
 .chips input:checked + span .sw { opacity: 1; }
-.custom-box { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
-.sliders { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 22px; margin: 10px 0 12px; }
-.sliders div { display: flex; align-items: center; gap: 10px; font-size: 12px; }
-.sliders .t { width: 42px; color: var(--muted); font-family: var(--mono); }
-.sliders .v { width: 38px; text-align: right; font-family: var(--mono); }
-input[type=range] { flex: 1; min-width: 60px; accent-color: var(--accent); }
-.wsum-row { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; font-size: 12px; }
+
+/* holdings */
+.hold-method { font-size: 12.5px; color: var(--fg-2); margin: 0 0 12px; max-width: 110ch; }
+.hold-method b { color: var(--fg); font-family: var(--mono); font-weight: 600; }
+table tfoot td { font-weight: 650; color: var(--fg); border-top: 1px solid var(--border-2); border-bottom: 0; }
+td.sel, th.sel { background: var(--accent-soft); }
+.caption { font-size: 11.5px; color: var(--muted); margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.hold-head-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* stat tiles */
 .stat .big { font-size: 30px; margin-top: 2px; }
@@ -335,12 +336,7 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 22px
         <div class="ctl-group"><span class="ctl-label">Portfolio strategy</span><div class="seg" id="strategies" role="radiogroup" aria-label="Portfolio strategy"></div>
           <button class="icon-btn" type="button" data-info="ctlInfo" aria-label="About the strategies">i</button></div>
       </div>
-      <div class="info" id="ctlInfo" style="margin-top:12px"><p>Every number, chart and table recalculates when you change a choice. All strategies cost the same as the obligations, so they compare on equal terms. Cash flow matching is a theoretical benchmark: one zero coupon bond per payment date, gap zero by construction.</p></div>
-      <div class="custom-box" id="customBox" hidden>
-        <div class="ctl-label">Custom weights: share of the budget per Treasury, must sum to 100%</div>
-        <div class="sliders" id="sliders"></div>
-        <div class="wsum-row"><b id="wsum" class="num"></b><button class="btn" id="normBtn" type="button">Normalise to 100%</button><button class="btn" id="resetBtn" type="button">Reset</button></div>
-      </div>
+      <div class="info" id="ctlInfo" style="margin-top:12px"><p>Every number, chart and table recalculates when you change a choice. All four strategies spend the same budget, equal to the cost to secure, so they compare on equal terms. Cash flow matching is a theoretical benchmark: one zero coupon bond per payment date, gap zero by construction. Bullet and barbell hold two Treasuries weighted so that the total DV01 gap is zero. Ladder spreads the budget equally over seven Treasuries.</p><p>The Portfolio holdings tile shows what each strategy would hold, not what anyone should buy.</p></div>
     </section>
 
     <!-- 5. Obligations DV01 -->
@@ -383,6 +379,30 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 22px
       <div class="data-panel tablewrap" id="t3"></div>
     </section>
 
+    <!-- 8b. Portfolio holdings -->
+    <section class="tile span4 needs-data" id="holdTile" aria-labelledby="holdTitle">
+      <div class="tile-head"><h2 class="tile-title" id="holdTitle">Portfolio holdings</h2>
+        <div class="tile-actions"><button class="btn" type="button" id="csvBtn">Download CSV</button><button class="btn" type="button" data-panel="holdAll" aria-expanded="false">All strategies</button><button class="icon-btn" type="button" data-info="holdInfo" aria-label="What this shows">i</button></div></div>
+      <div class="info" id="holdInfo">
+        <p>What the selected strategy would hold if it were built today with a budget equal to the cost to secure the selected obligations. It shows what each strategy would hold, not what anyone should buy.</p>
+        <p><b>Instrument</b>: the Treasury held (for cash flow matching, one zero coupon bond per payment date). <b>Weight</b>: share of the budget. <b>Amount to invest</b>: money spent on it, in USD millions (budget times weight). <b>Face value</b>: the amount repaid at maturity; notes and bonds are bought at par (100), so face value equals the amount, bills and zero coupons are bought at a discount, so face value is higher. <b>Yield or coupon</b>: the par yield, which is also the coupon of a par bond (zero rate for zero coupons). <b>Duration</b>: years; how much the value moves, in percent, for a 1 percentage point move in rates. <b>DV01 contribution</b>: value change of that holding, USD millions, if all rates rise by 1 basis point. <b>Share of portfolio DV01</b>: its part of the portfolio's total rate sensitivity.</p>
+        <p>The amounts add up to the cost to secure, the weights to 100% and the DV01 contributions to the portfolio DV01 shown in the gap tile; the page checks this at every recalculation.</p>
+      </div>
+      <div id="holdBlocked"></div>
+      <div id="holdBody">
+        <div class="fig-head" id="holdHead"></div>
+        <p class="hold-method" id="holdMethod"></p>
+        <div class="tablewrap" id="holdTable"></div>
+        <button class="linkbtn" type="button" id="holdMore" hidden></button>
+      </div>
+      <div class="data-panel" id="holdAll">
+        <div class="ctl-label">All strategies side by side: amount to invest per Treasury, USD millions. The same budget, spread in different ways.</div>
+        <div class="tablewrap" id="holdAllTable"></div>
+        <p class="sub" id="holdAllNote"></p>
+      </div>
+      <p class="caption">Illustrative construction for comparison. It is not a recommendation to buy or sell. Real trading would involve prices, lot sizes, costs and a view on rates that this page does not use.</p>
+    </section>
+
     <!-- 9. Obligation schedule -->
     <section class="tile span4 needs-data" aria-labelledby="schTitle">
       <div class="tile-head"><h2 class="tile-title" id="schTitle">Obligation schedule: present value by year</h2>
@@ -401,7 +421,7 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 22px
       <div class="info" id="v4note"></div>
       <div class="fig-head" id="scHead"></div>
       <div class="data-panel" id="shockPanel">
-        <div class="ctl-label">Custom scenario: shock per tenor in basis points. The 3 Mo shock only matters for a 3 Mo bill held in the Custom strategy: the obligations start at 0.5 years.</div>
+        <div class="ctl-label">Custom scenario: shock per tenor in basis points. It is applied to the selected strategy like the other scenarios. The 3 Mo shock does not change any result today: the obligations and every strategy start at 0.5 years. It would matter only if the obligations' duration fell below about half a year, when the bullet strategy would hold the 3 Mo bill.</div>
         <div class="shocks" id="shocks"></div>
       </div>
       <div class="tablewrap" id="t4"></div>
@@ -457,8 +477,8 @@ function tone(x, goodUp, eps) { if (!isFinite(x) || Math.abs(x) <= (eps || 0)) r
 function arrow(x, eps) { return !isFinite(x) || Math.abs(x) <= (eps || 0) ? "■ " : (x > 0 ? "▲ " : "▼ "); }
 
 const App = { state: null, blocked: false, R: null, heroShown: null, drawn: {} };
-const STRAT = [["cfm", "Cash flow matching"], ["bullet", "Bullet"], ["barbell", "Barbell"], ["ladder", "Ladder"], ["custom", "Custom"]];
-const STRAT_SHORT = { cfm: "Cash flow matching", bullet: "Bullet", barbell: "Barbell", ladder: "Ladder", custom: "Custom" };
+const STRAT = [["cfm", "Cash flow matching"], ["bullet", "Bullet"], ["barbell", "Barbell"], ["ladder", "Ladder"]];
+const STRAT_SHORT = E.STRAT_SHORT;
 const CAT = [["debt", "Debt principal", "--c1"], ["lease", "Operating leases", "--c2"], ["pens", "Pensions", "--c3"]];
 const BUCKETS = ["0 to 2 years", "2 to 7 years", "7 to 30 years"];
 const BUCKETS_SHORT = ["0–2y", "2–7y", "7–30y"];
@@ -717,7 +737,7 @@ function update() {
     [["Obligations", R.dv01, "var(--c1)"], ["Portfolio", S_.dv01, "var(--c2)"]].forEach(function (r) {
       const row = el("div", null, "cmp-row"); row.appendChild(el("span", r[0])); const tr = el("div", null, "cmp-track"); const f = el("span"); f.style.width = (Math.abs(r[1]) / mx * 100) + "%"; f.style.background = r[2]; tr.appendChild(f); row.appendChild(tr); row.appendChild(el("b", money(r[1], 2))); gc.appendChild(row);
     });
-  } else { $("gapValue").textContent = "n/a"; gp.className = "pill pending"; gp.textContent = "! Weights ≠ 100%"; $("gapSub").textContent = "Custom weights must sum to 100%."; }
+  }
 
   /* View 3: bucket sensitivity */
   $("v3note").textContent = "Value lost per +1 basis point in each maturity bucket, USD millions (the data table shows signed values and the gaps of every strategy). Obligations versus the " + STRAT_SHORT[st.strategy] + " portfolio, bought at par for the same cost. Equal columns in every bucket mean no hole opens when that part of the curve moves.";
@@ -785,6 +805,91 @@ function update() {
     return [nm, cell(r.dObl, false), P ? cell(P.d, true) : "n/a", gapEl, r.firstOrder !== undefined ? sgn(r.firstOrder, 1) : "–"];
   });
   clear($("t4")); $("t4").appendChild(table(["Scenario", "Obligations change", "Portfolio change", "Gap (portfolio − obligations)", "First order"], rows4, "scen"));
+
+  /* Portfolio holdings */
+  renderHoldings(st, R);
+}
+
+/* ---------------- Portfolio holdings ----------------
+   Everything below reads R.holdings, built in engine.js from the same weights that give the DV01 and gap figures. */
+const HOLD = { showAll: false };
+function addFoot(t, cells) { const tf = el("tfoot"), tr = el("tr"); cells.forEach(function (c) { tr.appendChild(el("td", c)); }); tf.appendChild(tr); t.appendChild(tf); return t; }
+function approxDate(years) { const t = new Date(App.summary.as_of + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + Math.round(years * 365.25)); return t.toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }); }
+function bucketGapText(S) { return S.bgap.map(function (g, k) { return BUCKETS_SHORT[k] + " " + smoney(g, 2) + "m"; }).join(", "); }
+
+function renderHoldings(st, R) {
+  const blocked = $("holdBlocked"), body = $("holdBody"); clear(blocked);
+  const errs = E.checkHoldings(R);
+  $("csvBtn").disabled = errs.length > 0;
+  if (errs.length) {
+    body.hidden = true;
+    errs.forEach(function (e) { blocked.appendChild(el("div", "Cannot show the holdings: " + e + " Nothing has been replaced by zero.", "alert err")); });
+    clear($("holdAllTable")); $("holdAllNote").textContent = "";
+    return;
+  }
+  body.hidden = false;
+  const s = st.strategy, H = R.holdings[s], S_ = R.strat[s], tenors = App.data.curve.tenors;
+  $("holdTitle").textContent = "Portfolio holdings · " + STRAT_SHORT[s];
+  const hh = $("holdHead"); clear(hh);
+  [["Budget (cost to secure)", "$" + fmt(R.pv / 1000, 2) + "bn"], [s === "cfm" ? "Zero coupon bonds" : "Treasuries held", String(H.rows.length)], ["Portfolio duration", fmt(H.total.duration, 2) + " yrs"], ["Portfolio DV01", money(H.total.dv01, 2) + "m"], ["DV01 gap", smoney(S_.gap, 2) + "m"]].forEach(function (f) {
+    const b = el("div"); b.appendChild(el("div", f[0], "label")); b.appendChild(el("div", f[1], "big")); hh.appendChild(b); });
+
+  /* how the weights are built */
+  const m = $("holdMethod"); clear(m);
+  const add = function (t, bold) { m.appendChild(bold ? el("b", t) : document.createTextNode(t)); };
+  if (s === "cfm") {
+    add("One zero coupon Treasury per half year payment date: face value = the obligation cash flow at that date, price = discount factor, amount = face value times price. The amounts add up to the cost to secure and the DV01 gap is zero by construction. Real zero coupon Treasuries (STRIPS) exist only for some dates and are less liquid, so this is a theoretical benchmark.");
+  } else if (s === "ladder") {
+    add("Equal weights on the seven coupon Treasuries (2, 3, 5, 7, 10, 20 and 30 Yr), " + fmt(100 / 7, 2) + "% each. The duration is not matched to the obligations (" + fmt(H.total.duration, 2) + " against " + fmt(R.dur, 2) + " years), so a total DV01 gap remains: ");
+    add(smoney(S_.gap, 2) + "m per bp", true); add(". Bucket gaps: " + bucketGapText(S_) + ".");
+  } else {
+    const rows = H.rows.slice().sort(function (a, b) { return a.duration - b.duration; }), sh = rows[0], lg = rows[rows.length - 1];
+    add((s === "bullet" ? "The two Treasuries whose durations bracket the obligations' duration: " : "The shortest and longest coupon Treasuries: ") + sh.tenor + " (duration " + fmt(sh.duration, 2) + ") and " + lg.tenor + " (duration " + fmt(lg.duration, 2) + "). Weight on the shorter bond = (duration of the longer bond minus obligations duration) divided by (duration of the longer bond minus duration of the shorter bond) = (" + fmt(lg.duration, 2) + " minus " + fmt(R.dur, 2) + ") / (" + fmt(lg.duration, 2) + " minus " + fmt(sh.duration, 2) + ") = ");
+    add(fmt(sh.weight * 100, 2) + "%", true); add("; the longer bond takes the rest. The portfolio duration then equals the obligations' duration, so the total DV01 gap is zero. Bucket gaps that remain: " + bucketGapText(S_) + ".");
+  }
+  R.flags.forEach(function (f) { if (f.indexOf(STRAT_SHORT[s]) === 0) m.appendChild(el("div", f, "alert warn")); });
+
+  /* table of holdings */
+  const ht = $("holdTable"), more = $("holdMore"); clear(ht);
+  let t;
+  if (s === "cfm") {
+    const LIMIT = 12, rows = HOLD.showAll ? H.rows : H.rows.slice(0, LIMIT);
+    t = table(["Maturity (years)", "Approx. date", "Face value (USD m)", "Price (discount factor)", "Amount to invest (USD m)", "Zero rate (%)", "Duration (yrs)", "DV01 contribution (USD m per bp)", "Share of portfolio DV01"],
+      rows.map(function (r) { return [fmt(r.years, 1) + " yrs", approxDate(r.years), fmt(r.face, 1), fmt(r.price, 4), fmt(r.amount, 1), fmt(r.yield * 100, 2), fmt(r.duration, 2), sgn(r.dv01, 3), fmt(r.share * 100, 1) + "%"]; }));
+    addFoot(t, ["Total, " + H.rows.length + " bonds", "", fmt(H.rows.reduce(function (a, r) { return a + r.face; }, 0), 1), "", fmt(H.total.amount, 1), "", fmt(H.total.duration, 2), sgn(H.total.dv01, 3), "100.0%"]);
+    more.hidden = H.rows.length <= LIMIT; more.textContent = HOLD.showAll ? "Show fewer dates ‹" : "Show all " + H.rows.length + " dates ›";
+  } else {
+    t = table(["Instrument", "Weight", "Amount to invest (USD m)", "Face value (USD m)", "Yield or coupon (%)", "Duration (yrs)", "DV01 contribution (USD m per bp)", "Share of portfolio DV01"],
+      H.rows.map(function (r) { return [r.instrument, fmt(r.weight * 100, 2) + "%", fmt(r.amount, 1), fmt(r.face, 1), fmt(r.yield * 100, 2), fmt(r.duration, 2), sgn(r.dv01, 3), fmt(r.share * 100, 1) + "%"]; }));
+    addFoot(t, ["Total", fmt(H.total.weight * 100, 2) + "%", fmt(H.total.amount, 1), fmt(H.rows.reduce(function (a, r) { return a + r.face; }, 0), 1), "", fmt(H.total.duration, 2), sgn(H.total.dv01, 3), "100.0%"]);
+    more.hidden = true;
+  }
+  ht.appendChild(t);
+
+  /* all strategies side by side (tenor strategies; cash flow matching holds zero coupons instead) */
+  const cols = ["bullet", "barbell", "ladder"], used = tenors.map(function (_, k) { return cols.some(function (c) { return Math.abs(R.w[c][k]) > 1e-12; }); });
+  const at = table(["Treasury"].concat(cols.map(function (c) { return STRAT_SHORT[c] + " (USD m)"; })),
+    tenors.map(function (tn, k) { return used[k] ? [tn].concat(cols.map(function (c) { const v = R.w[c][k]; return Math.abs(v) > 1e-12 ? fmt(R.pv * v, 1) : ""; })) : null; }).filter(Boolean));
+  addFoot(at, ["Total"].concat(cols.map(function (c) { return fmt(R.holdings[c].total.amount, 1); })));
+  const ci = cols.indexOf(s);
+  if (ci >= 0) at.querySelectorAll("tr").forEach(function (tr) { const c = tr.children[ci + 1]; if (c) c.classList.add("sel"); });
+  clear($("holdAllTable")); $("holdAllTable").appendChild(at);
+  $("holdAllNote").textContent = "Cash flow matching does not use these Treasuries: it holds " + R.holdings.cfm.rows.length + " zero coupon bonds, one per payment date, for the same total of $" + fmt(R.holdings.cfm.total.amount, 1) + "m (select it to see them).";
+}
+
+/* CSV of the selected strategy's holdings, built in the browser (no network call). */
+function downloadCsv() {
+  const R = App.R; if (!R || R.empty || E.checkHoldings(R).length) return;
+  const s = App.state.strategy, H = R.holdings[s], q = function (v) { const x = String(v); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+  const head = ["strategy", "instrument", "maturity_years", "weight_pct", "amount_usd_m", "price", "face_value_usd_m", "yield_or_coupon_pct", "duration_years", "dv01_contribution_usd_m_per_bp", "share_of_portfolio_dv01_pct"];
+  const lines = [head.join(",")];
+  H.rows.forEach(function (r) { lines.push([STRAT_SHORT[s], r.instrument, r.years, (r.weight * 100).toFixed(6), r.amount.toFixed(4), r.price.toFixed(8), r.face.toFixed(4), (r.yield * 100).toFixed(4), r.duration.toFixed(4), r.dv01.toFixed(6), (r.share * 100).toFixed(4)].map(q).join(",")); });
+  lines.push([STRAT_SHORT[s], "Total", "", (H.total.weight * 100).toFixed(6), H.total.amount.toFixed(4), "", H.rows.reduce(function (a, r) { return a + r.face; }, 0).toFixed(4), "", H.total.duration.toFixed(4), H.total.dv01.toFixed(6), "100"].map(q).join(","));
+  const cats = CAT.filter(function (c) { return App.state.cats[c[0]]; }).map(function (c) { return c[1]; }).join("; ");
+  lines.unshift("# Progetto Fintech ADFH, illustrative holdings, not a recommendation. Curve " + App.summary.as_of + ", obligations: " + cats + ". USD millions.");
+  const blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv;charset=utf-8" }), url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = "holdings_" + s + "_" + App.summary.as_of + ".csv"; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
 }
 
 function buildControls() {
@@ -792,17 +897,7 @@ function buildControls() {
   const cats = $("cats");
   CAT.forEach(function (c) { const l = el("label"); const i = el("input"); i.type = "checkbox"; i.checked = st.cats[c[0]]; i.addEventListener("change", function () { st.cats[c[0]] = i.checked; update(); }); const sp = el("span"); const sw = el("span", null, "sw"); sw.style.background = "var(" + c[2] + ")"; sp.appendChild(sw); sp.appendChild(document.createTextNode(c[1])); l.appendChild(i); l.appendChild(sp); cats.appendChild(l); });
   const sg = $("strategies");
-  STRAT.forEach(function (s) { const l = el("label"); const i = el("input"); i.type = "radio"; i.name = "strat"; i.value = s[0]; i.checked = st.strategy === s[0]; i.addEventListener("change", function () { st.strategy = s[0]; $("customBox").hidden = s[0] !== "custom"; update(); }); l.appendChild(i); l.appendChild(el("span", s[1])); if (s[0] === "cfm") l.title = "Cash flow matching (theoretical benchmark)"; sg.appendChild(l); });
-  const sl = $("sliders"); const outs = [];
-  d.curve.tenors.forEach(function (t, k) {
-    const row = el("div"); row.appendChild(el("span", t, "t")); const r = el("input"); r.type = "range"; r.min = 0; r.max = 100; r.step = 1; r.value = st.custom[k]; r.setAttribute("aria-label", "Weight of " + t);
-    const o = el("span", st.custom[k] + "%", "v"); r.addEventListener("input", function () { st.custom[k] = Number(r.value); o.textContent = r.value + "%"; wsum(); update(); }); row.appendChild(r); row.appendChild(o); sl.appendChild(row); outs.push([r, o]);
-  });
-  function wsum() { const s = st.custom.reduce(function (a, b) { return a + b; }, 0); const w = $("wsum"); w.textContent = "Total " + s + "%" + (s === 100 ? "" : " · must be 100%; Custom results are hidden until it is"); w.className = "num " + (s === 100 ? "gain" : "warn"); }
-  function setAll(arr) { arr.forEach(function (v, k) { st.custom[k] = v; outs[k][0].value = v; outs[k][1].textContent = v + "%"; }); wsum(); update(); }
-  $("normBtn").addEventListener("click", function () { const s = st.custom.reduce(function (a, b) { return a + b; }, 0); if (s <= 0) return; const raw = st.custom.map(function (v) { return v / s * 100; }); const rd = raw.map(Math.floor); let rem = 100 - rd.reduce(function (a, b) { return a + b; }, 0); raw.map(function (v, k) { return [v - Math.floor(v), k]; }).sort(function (a, b) { return b[0] - a[0]; }).forEach(function (p) { if (rem > 0) { rd[p[1]]++; rem--; } }); setAll(rd); });
-  $("resetBtn").addEventListener("click", function () { setAll(d.portfolio.custom_default_weights_pct.slice()); });
-  wsum();
+  STRAT.forEach(function (s) { const l = el("label"); const i = el("input"); i.type = "radio"; i.name = "strat"; i.value = s[0]; i.checked = st.strategy === s[0]; i.addEventListener("change", function () { st.strategy = s[0]; update(); }); l.appendChild(i); l.appendChild(el("span", s[1])); if (s[0] === "cfm") l.title = "Cash flow matching (theoretical benchmark)"; sg.appendChild(l); });
   const sh = $("shocks"); d.curve.tenors.forEach(function (t, k) { const w = el("div"); const id = "shock" + k; const lb = el("label", t + " (bp)"); lb.htmlFor = id; w.appendChild(lb); const i = el("input"); i.id = id; i.type = "number"; i.step = "1"; i.value = st.shocks[k]; i.setAttribute("aria-label", "Custom shock in basis points for " + t); i.addEventListener("input", function () { st.shocks[k] = i.value === "" ? NaN : Number(i.value); update(); }); w.appendChild(i); sh.appendChild(w); });
 }
 
@@ -813,6 +908,8 @@ function wireUi() {
   const setTheme = function (t) { document.documentElement.setAttribute("data-theme", t); $("themeLabel").textContent = t === "dark" ? "Light" : "Dark"; try { localStorage.setItem("adfh-theme", t); } catch (e) {} };
   $("themeLabel").textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "Light" : "Dark";
   $("themeBtn").addEventListener("click", function () { setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"); App.drawn = {}; if (!App.blocked) update(); });
+  $("csvBtn").addEventListener("click", downloadCsv);
+  $("holdMore").addEventListener("click", function () { HOLD.showAll = !HOLD.showAll; if (App.R && !App.R.empty) renderHoldings(App.state, App.R); });
   const hist = $("history"), hb = $("historyBtn");
   const setHist = function (open) { hist.hidden = !open; hb.setAttribute("aria-expanded", String(open)); hb.textContent = open ? "Hide update history ‹" : "Update history ›"; if (open) hist.scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "nearest" }); };
   hb.addEventListener("click", function () { setHist(hist.hidden); }); $("historyClose").addEventListener("click", function () { setHist(false); hb.focus(); });
@@ -1042,7 +1139,8 @@ function buildAbout(summary, data, valid) {
     "Cost to secure = sum of each payment times its discount factor. Payments are placed in the middle of each year of the 10-K schedule, and the schedule is moved forward from the fiscal year end to the curve date: payments already due are dropped and later ones are split between the two nearest half years so the nominal amount is kept.",
     "Coverage ratio = cash and cash equivalents divided by the cost to secure.",
     "DV01 = change in value when all zero rates rise by one basis point (0.01 percentage points). It is negative because values fall when rates rise. Bucket DV01 does the same for 0 to 2, 2 to 7 and 7 to 30 years separately. Gap = portfolio DV01 minus obligations DV01. A gap of -3.5 (an illustrative number, not the current result) means that when rates rise by 1 basis point the portfolio loses USD 3.5 million more than the obligations lose, so the net position gets worse; a positive gap means the opposite.",
-    "Strategies all cost the same as the obligations, so they compare on equal terms. Cash flow matching is a theoretical zero coupon bond per payment date (gap zero by construction). Bullet uses the two Treasuries around the obligations' duration, barbell uses 2 and 30 years, both weighted to match total DV01. Ladder holds equal value in every coupon tenor. Custom uses your weights.",
+    "Strategies all cost the same as the obligations, so they compare on equal terms. Cash flow matching is a theoretical zero coupon bond per payment date (gap zero by construction). Bullet uses the two Treasuries whose durations bracket the obligations' duration, barbell uses the 2 and 30 year Treasuries; both are weighted so that the portfolio duration equals the obligations' duration, which makes the total DV01 gap zero (bucket gaps remain). Weight on the shorter bond = (duration of the longer bond minus obligations duration) divided by (duration of the longer bond minus duration of the shorter bond); the longer bond takes the rest. Ladder holds equal value in the seven coupon Treasuries (2, 3, 5, 7, 10, 20 and 30 years), so its duration is not matched.",
+    "Holdings: for bullet, barbell and ladder, amount to invest = cost to secure times weight; notes and bonds are bought at par (price 100), so face value = amount; bills are bought at their discount price (1 + y/2) to the power of minus 2T. For cash flow matching, one zero coupon bond per half year payment date: face value = the obligation cash flow at that date, price = discount factor, amount = face value times price. DV01 contribution = amount times the value change per unit for a 1 basis point rise in zero rates; the contributions add up to the portfolio DV01. These holdings come from the same weights and sensitivities as the DV01 and gap figures.",
     "Scenarios shock the par curve in absolute basis points, bootstrap it again and reprice everything. Replays apply the real change of the Treasury curve between two dates."];
   const ol = el("ol"); steps.forEach(function (s) { ol.appendChild(el("li", s)); }); a.appendChild(ol);
   a.appendChild(el("h3", "Main assumptions"));
@@ -1052,7 +1150,7 @@ function buildAbout(summary, data, valid) {
    "Dates: the payment schedule is as of " + o.fiscal_year_end + " and the curve is as of " + summary.as_of + ". The model rolls the schedule forward by " + fmt(E.elapsedYears(summary.as_of, o.fiscal_year_end), 2) + " years. This is an approximation: payments of the current year are treated as paid at the middle of that year, so any amount still due before year end is dropped. The last row of the sensitivity table shows the old method without roll forward.",
    "Pensions: pension plans only, from the filing's benefit payment table. " + o.notes.join(" "),
    "Liquid assets: " + data.liquid_assets.note,
-   "Scenario shocks and replay windows are model assumptions; each is labelled in View 4. The one month comparison uses the nearest stored curve date on or before one month earlier."].forEach(function (t) { as.appendChild(el("li", t)); });
+   "Scenario shocks and replay windows are model assumptions; each is labelled in the Scenarios tile. The custom shock is applied to the selected strategy like the other scenarios. The one month comparison uses the nearest stored curve date on or before one month earlier."].forEach(function (t) { as.appendChild(el("li", t)); });
   a.appendChild(as);
   if (valid) { a.appendChild(el("h3", "How much the assumptions matter")); P("Cost to secure (USD millions) and coverage ratio when one assumption changes, on the curve of " + summary.as_of + " (recalculated in the page). The base case is the dashboard default."); var sw = document.createElement("div"); sw.className = "tablewrap"; sw.appendChild(table(["Assumption change", "Cost to secure", "Change", "Coverage"], E.sensitivity(data, summary.as_of, E.curveYields(data, summary.as_of)).map(function (r) { return [r.label, fmt(r.cost, 1), (r.change_pct > 0 ? "+" : "") + fmt(r.change_pct, 1) + "%", fmt(r.coverage * 100, 1) + "%"]; }))); a.appendChild(sw); }
   a.appendChild(el("h3", "Limitations: when this can mislead"));
@@ -1062,7 +1160,7 @@ function buildAbout(summary, data, valid) {
    "A coverage ratio below 1 is not a sign of distress: operating cash flows are not counted. Credit risk, taxes, trading costs and non USD obligations are out of scope. Liquid assets are cash at the fiscal year end while the obligations are rolled forward to the curve date, so some of that cash may already have paid the year 1 payments that the roll forward drops.",
    "Pension payments are disclosed for ten years only, so pension obligations are understated. Pension benefits are normally paid from separate plan assets that are not counted, so the coverage ratio with pensions is conservative; the sensitivity table shows it without pensions.",
    "Only the listed obligations are covered: debt principal without interest, operating lease payments (no finance leases), and pension benefits for ten years. The cost to secure is therefore a lower bound of the full cost of the company's obligations.",
-   "Portfolios are hypothetical and Treasury yields are not bond total returns. Historical replays show plausible moves, not forecasts.",
+   "Portfolios and their holdings are hypothetical and illustrative: they ignore prices of specific issues, lot sizes, trading costs and taxes, and real zero coupon Treasuries (STRIPS) exist only for some dates and are less liquid. Treasury yields are not bond total returns. Historical replays show plausible moves, not forecasts.",
    "Data becomes stale: this page warns when the curve is older than " + m.stale_rules.curve_business_days + " business days or the filing's fiscal year end is older than " + m.stale_rules.fiscal_year_months + " months."].forEach(function (t) { li2.appendChild(el("li", t)); });
   a.appendChild(li2);
   P("Educational project. Not investment advice.");
@@ -1090,7 +1188,7 @@ function render(summary, data) {
   if (mo > data.meta.stale_rules.fiscal_year_months) $("alerts").appendChild(el("div", "Stale obligations: the fiscal year end is " + mo + " months old (limit " + data.meta.stale_rules.fiscal_year_months + ").", "alert warn"));
   App.y0 = E.curveYields(data, summary.as_of); App.yM = E.curveYields(data, data.curve.ref_dates.month_earlier);
   if (!App.yM) { App.yM = App.y0; $("alerts").appendChild(el("div", "The one month earlier curve is missing a value; trend labels compare with today.", "alert warn")); }
-  App.state = { cats: { debt: true, lease: true, pens: true }, strategy: data.portfolio.default_strategy, custom: data.portfolio.custom_default_weights_pct.slice(), shocks: data.curve.tenors.map(function () { return 0; }) };
+  App.state = { cats: { debt: true, lease: true, pens: true }, strategy: data.portfolio.default_strategy, shocks: data.curve.tenors.map(function () { return 0; }) };
   buildControls();
   update();
 }

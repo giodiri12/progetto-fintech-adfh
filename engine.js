@@ -10,6 +10,10 @@
   function dsgn(x, d) { if (x === null || !isFinite(x)) return "n/a"; const neg = x < 0 && Math.round(Math.abs(x) * Math.pow(10, d)) > 0; return (neg ? "-$" : "$") + fmt(Math.abs(x), d); }
   function round(x, d) { const p = Math.pow(10, d); return Math.round(x * p) / p; }
 
+  /* ---------------- strategies ---------------- */
+  const STRATEGIES = ["cfm", "bullet", "barbell", "ladder"];
+  const STRAT_SHORT = { cfm: "Cash flow matching", bullet: "Bullet", barbell: "Barbell", ladder: "Ladder" };
+
   /* ---------------- curve maths ---------------- */
   function interp(yrs, ys, t) {
     const n = yrs.length; if (t >= yrs[n - 1]) return ys[n - 1];
@@ -76,7 +80,7 @@
   }
 
   /* ---------------- valuation, DV01 and portfolios ----------------
-     st = { cats: {debt, lease, pens}, strategy, custom: [10 weights in percent] } */
+     st = { cats: {debt, lease, pens}, strategy }. Strategies: cfm (cash flow matching), bullet, barbell, ladder. */
   function compute(data, asOf, y0, st, opts) {
     const d = data, yrs = d.curve.years, bump = d.meta.bump_bp, b = bump / 1e4, lim = d.portfolio.bucket_limits_years;
     const sch = schedule(d, asOf, st.cats, opts), DF = bootstrap(yrs, y0), z = zeros(DF);
@@ -111,18 +115,65 @@
     const w30 = (R.dur - D[3]) / (D[9] - D[3]); w.barbell = new Array(10).fill(0); w.barbell[3] = 1 - w30; w.barbell[9] = w30;
     if (w30 < 0 || w30 > 1) R.flags.push("Barbell: weights fall outside 0 to 100 percent, barbell cannot match the obligations duration.");
     const nb = types.filter(function (t) { return t === "Par bond"; }).length; w.ladder = types.map(function (t) { return t === "Par bond" ? 1 / nb : 0; });
-    const custom = st.custom || d.portfolio.custom_default_weights_pct;
-    const sumC = custom.reduce(function (a, b2) { return a + b2; }, 0);
-    w.custom = Math.abs(sumC - 100) < 1e-9 ? custom.map(function (x) { return x / 100; }) : null;
     R.w = w;
     R.strat = {};
-    ["cfm", "bullet", "barbell", "ladder", "custom"].forEach(function (s) {
+    STRATEGIES.forEach(function (s) {
       if (s === "cfm") { R.strat[s] = { dv01: R.dv01, b: R.bdv01.slice(), cost: R.pv }; }
-      else if (!w[s]) { R.strat[s] = null; return; }
       else { const ww = w[s]; R.strat[s] = { dv01: R.pv * dot(ww, R.inst.map(function (x) { return x.I; })), b: [0, 1, 2].map(function (k) { return R.pv * dot(ww, R.inst.map(function (x) { return x.B[k]; })); }), cost: R.pv }; }
       const S = R.strat[s]; S.gap = S.dv01 - R.dv01; S.bgap = S.b.map(function (x, k) { return x - R.bdv01[k]; });
     });
+    R.holdings = holdings(d, R, dfUp, bump);
     return R;
+  }
+
+  /* ---------------- holdings ----------------
+     What each strategy would hold, built from the same weights (R.w) and instrument sensitivities (R.inst)
+     that give the strategy DV01 above: nothing is computed a second way.
+     Tenor strategies (bullet, barbell, ladder): amount = cost to secure x weight; par bonds are bought at 100
+     (price 1, face = amount); bills at their discount price (1 + y/2)^(-2T); DV01 contribution = amount x DV01 per unit.
+     Cash flow matching: one zero coupon bond per half year payment date; face = obligation cash flow at that date,
+     price = discount factor, amount = face x price, DV01 contribution = face x (bumped DF - DF) / bump. */
+  function holdings(d, R, dfUp, bump) {
+    const H = {}, tenors = d.curve.tenors;
+    STRATEGIES.forEach(function (s) {
+      const rows = [];
+      if (s === "cfm") {
+        R.sch.cf.forEach(function (face, n) {
+          if (!(face > 0)) return;
+          const amount = face * R.DF[n], dv01 = face * (dfUp[n] - R.DF[n]) / bump;
+          rows.push({ instrument: "Zero coupon " + fmt((n + 1) / 2, 1) + " yrs", years: (n + 1) / 2, kind: "zero", weight: amount / R.pv, amount: amount, price: R.DF[n], face: face, yield: R.z[n], duration: -dv01 / amount * 10000, dv01: dv01 });
+        });
+      } else {
+        R.w[s].forEach(function (wk, k) {
+          if (Math.abs(wk) < 1e-12) return;
+          const x = R.inst[k], amount = R.pv * wk, price = x.bill ? Math.pow(1 + x.y / 2, -2 * x.T) : 1;
+          rows.push({ instrument: tenors[k] + " Treasury" + (x.bill ? " bill" : ""), tenor: tenors[k], years: x.T, kind: x.bill ? "bill" : "par", weight: wk, amount: amount, price: price, face: amount / price, yield: x.y, duration: x.D, dv01: amount * x.I });
+        });
+      }
+      const S = R.strat[s];
+      rows.forEach(function (r) { r.share = r.dv01 / S.dv01; });
+      H[s] = {
+        rows: rows,
+        total: { weight: rows.reduce(function (a, r) { return a + r.weight; }, 0), amount: rows.reduce(function (a, r) { return a + r.amount; }, 0), dv01: S.dv01, duration: -S.dv01 / R.pv * 10000, contrib: rows.reduce(function (a, r) { return a + r.dv01; }, 0) }
+      };
+    });
+    return H;
+  }
+
+  /* Consistency checks of the holdings, run by the page on every recalculation and by the daily update script.
+     Returns a list of problems (empty when everything is consistent). */
+  function checkHoldings(R) {
+    const errs = [];
+    if (R.empty || !R.holdings) return errs;
+    STRATEGIES.forEach(function (s) {
+      const H = R.holdings[s], S = R.strat[s], name = STRAT_SHORT[s];
+      if (!H || !S) { errs.push(name + ": holdings missing."); return; }
+      if (!(Math.abs(H.total.amount - R.pv) <= 0.01)) errs.push(name + ": amounts add up to " + fmt(H.total.amount, 4) + " instead of the cost to secure " + fmt(R.pv, 4) + " USD millions.");
+      if (!(Math.abs(H.total.weight - 1) <= 1e-9)) errs.push(name + ": weights add up to " + fmt(H.total.weight * 100, 6) + "% instead of 100%.");
+      if (!(Math.abs(H.total.contrib - S.dv01) <= 1e-9 * Math.abs(S.dv01))) errs.push(name + ": DV01 contributions add up to " + fmt(H.total.contrib, 6) + " instead of the portfolio DV01 " + fmt(S.dv01, 6) + ".");
+      if (s === "cfm" && !(Math.abs(H.total.contrib - R.dv01) <= 1e-9 * Math.abs(R.dv01))) errs.push(name + ": the DV01 gap is not zero (" + fmt(H.total.contrib - R.dv01, 9) + ").");
+    });
+    return errs;
   }
 
   /* ---------------- scenarios ---------------- */
@@ -155,21 +206,19 @@
       const N = Math.round(2 * x.T); let s = 0; for (let i = 0; i < N; i++) s += DFs[i]; return x.y / 2 * s + DFs[N - 1];
     });
     res.instVal = instVal;
-    ["cfm", "bullet", "barbell", "ladder", "custom"].forEach(function (s) {
+    STRATEGIES.forEach(function (s) {
       if (s === "cfm") res[s] = { d: res.dObl, gap: 0 };
-      else if (!R.w[s]) res[s] = null;
       else { const v = R.pv * dot(R.w[s], instVal); res[s] = { d: v - R.pv, gap: v - R.pv - res.dObl }; }
     });
     return res;
   }
 
   /* ---------------- summary outputs ---------------- */
-  const STRAT_SHORT = { cfm: "Cash flow matching", bullet: "Bullet", barbell: "Barbell", ladder: "Ladder", custom: "Custom" };
   const ALL_CATS = { debt: true, lease: true, pens: true };
 
   function headline(R, st) {
     const S = R.strat[st.strategy];
-    return "Securing " + (st.cats.debt && st.cats.lease && st.cats.pens ? "the listed" : "the selected") + " obligations costs $" + fmt(R.pv / 1000, 1) + "bn today; liquid assets cover " + fmt(R.cov * 100, 1) + "%. " + STRAT_SHORT[st.strategy] + " portfolio gap: " + (S ? dsgn(S.gap, 1) + "m per bp." : "n/a (custom weights must sum to 100%).");
+    return "Securing " + (st.cats.debt && st.cats.lease && st.cats.pens ? "the listed" : "the selected") + " obligations costs $" + fmt(R.pv / 1000, 1) + "bn today; liquid assets cover " + fmt(R.cov * 100, 1) + "%. " + STRAT_SHORT[st.strategy] + " portfolio gap: " + dsgn(S.gap, 1) + "m per bp.";
   }
   function trend(a, b) { return a > b * 1.005 ? "up" : (a < b * 0.995 ? "down" : "flat"); }
 
@@ -239,7 +288,7 @@
     curveYields: curveYields, refDates: refDates, shiftMonths: shiftMonths,
     elapsedYears: elapsedYears, allocate: allocate, schedule: schedule,
     compute: compute, scenarioShocks: scenarioShocks, runScenario: runScenario,
-    STRAT_SHORT: STRAT_SHORT, headline: headline, trend: trend, sensitivity: sensitivity, derived: derived,
+    STRATEGIES: STRATEGIES, STRAT_SHORT: STRAT_SHORT, holdings: holdings, checkHoldings: checkHoldings, headline: headline, trend: trend, sensitivity: sensitivity, derived: derived,
     validate: validate
   };
   root.ADFH_ENGINE = API;

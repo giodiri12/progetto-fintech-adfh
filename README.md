@@ -25,19 +25,24 @@ The page is a single-screen "bento" dashboard in a dark theme, with a light them
 
 **Controls**
 - Obligation categories, switched on or off as chips.
-- Portfolio strategy: cash flow matching, bullet, barbell, ladder, or custom weights set with sliders.
+- Portfolio strategy: cash flow matching, bullet, barbell or ladder (default: ladder).
 
 **Risk and charts**
 1. **Obligations DV01**, with its split by maturity bucket.
 2. **DV01 gap of the selected portfolio**, with a matched / small / large mismatch badge.
 3. **Treasury par yield curve:** today against one month and one year earlier, with the 10-year yield and the 30y − 2y spread.
 4. **Rate sensitivity by maturity bucket** (0–2, 2–7, 7–30 years): obligations against the selected portfolio.
-5. **Obligation schedule by year:** present value by category (debt, leases, pensions) and nominal payments.
-6. **Scenarios**, each with a full revaluation:
+5. **Portfolio holdings:** what the selected strategy would hold, for the selected obligations, with a budget equal to the cost to secure.
+   - For bullet, barbell and ladder: one row per Treasury with weight, amount to invest, face value, yield or coupon, duration, DV01 contribution and share of the portfolio DV01, plus a total row.
+   - For cash flow matching: the ladder of zero coupon bonds, one per half year payment date (face value = obligation cash flow, price = discount factor).
+   - A one line explanation of how the weights are built, an *All strategies* comparison of the amounts per Treasury, and a *Download CSV* button (built in the browser, no network call).
+   - It shows what each strategy would hold, not what anyone should buy.
+6. **Obligation schedule by year:** present value by category (debt, leases, pensions) and nominal payments.
+7. **Scenarios** for the selected strategy, each with a full revaluation:
    - parallel shifts of ±100 basis points;
    - curve steepening and flattening;
    - replays of the actual moves of autumn 2008, March 2020 and 2022;
-   - a custom shock per maturity.
+   - a custom shock per maturity, typed by the user.
 
 **Colours carry meaning.** Green means better for the company: cheaper obligations, portfolio gains, a surplus. Red means worse: costlier obligations, losses, a shortfall. Amber means a caution. These colours always come with a sign, an arrow or a label. Categories use a separate colour-blind-safe palette (blue, orange, aqua), and yields are shown in neutral colours because a rise in rates is neither good nor bad in itself.
 
@@ -106,7 +111,13 @@ These are public data from US federal agencies. No restriction on reuse was foun
    - Amounts after year 5 are spread evenly: debt and leases over years 6–30, pensions over years 6–10.
 4. **Cost to secure** = Σ payment × discount factor. **Coverage** = cash and equivalents / cost.
 5. **DV01** = change in value when all zero rates rise by 1 basis point. It is computed in total and by bucket (0–2, 2–7, 7–30 years).
-6. **Portfolios.** They are hypothetical, made of par bonds bought today, and each one costs exactly as much as the obligations. The gap is the portfolio DV01 minus the obligations DV01. Cash flow matching has a zero gap by construction.
+6. **Portfolios.** They are hypothetical, made of Treasuries bought today, and each one costs exactly as much as the obligations. The gap is the portfolio DV01 minus the obligations DV01.
+   - *Cash flow matching:* one zero coupon bond per payment date, so the gap is zero by construction. It is a theoretical benchmark: real zero coupon Treasuries (STRIPS) exist only for some dates and are less liquid.
+   - *Bullet:* the two Treasuries whose durations bracket the obligations' duration. *Barbell:* the 2 and 30 year Treasuries.
+   - For both, weight on the shorter bond = (duration of the longer bond minus obligations duration) / (duration of the longer bond minus duration of the shorter bond), and the longer bond takes the rest. The portfolio duration then equals the obligations' duration, so the total DV01 gap is zero; the gaps by maturity bucket remain.
+   - *Ladder:* equal weights on the 2, 3, 5, 7, 10, 20 and 30 year Treasuries. Its duration is not matched, so a total gap remains.
+   - **Holdings.** Amount to invest = cost to secure × weight. Notes and bonds are bought at par, so face value = amount; bills are bought at their discount price (1 + y/2)^(−2T), so face value = amount / price. DV01 contribution = amount × value change per unit for a 1 basis point rise in zero rates.
+   - Holdings come from the same weights as the DV01 and gap figures. The page and the daily update script check that the amounts add up to the cost to secure (within 0.01), the weights to 100%, and the DV01 contributions to the portfolio DV01, and that the cash flow matching gap is zero. If a check fails, the holdings are not shown.
 7. **Scenarios.** The par curve is shifted by absolute basis points, the bootstrap is redone and everything is revalued. For parallel shocks the first order estimate (DV01 × shock) is also shown: the difference from the full revaluation is convexity.
 
 Reference: Tuckman, B. and Serrat, A., *Fixed Income Securities: Tools for Today's Markets*, 3rd ed., Wiley.

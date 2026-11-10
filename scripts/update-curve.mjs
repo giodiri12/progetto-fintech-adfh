@@ -277,6 +277,15 @@ async function main() {
   const R = E.compute(d, asOf, y0, { cats: { debt: true, lease: true, pens: true }, strategy: d.portfolio.default_strategy });
   check([R.pv, R.cov, R.dv01].every(isFinite) && R.pv > 0, "valuation is not a finite positive number");
   d.scenarios.forEach((sc) => { const r = E.runScenario(d, y0, R, sc); check(!r.invalid && isFinite(r.dObl), `scenario ${sc.id} cannot be computed`); });
+  // holdings of every strategy, for every combination of obligation categories: amounts = cost, weights = 100%,
+  // DV01 contributions = portfolio DV01, cash flow matching gap = 0 (same checks as the page)
+  check(E.STRATEGIES.includes(d.portfolio.default_strategy), `default strategy "${d.portfolio.default_strategy}" is not one of ${E.STRATEGIES.join(", ")}`);
+  for (let m = 1; m < 8; m++) {
+    const cats = { debt: !!(m & 1), lease: !!(m & 2), pens: !!(m & 4) };
+    const Rm = E.compute(d, asOf, y0, { cats: cats, strategy: d.portfolio.default_strategy });
+    const herrs = E.checkHoldings(Rm);
+    check(herrs.length === 0, `holdings check failed for categories ${JSON.stringify(cats)}: ${herrs.join(" | ")}`);
+  }
 
   const text = serialise(D);
   if (JSON.stringify(D) === before) { console.log("Nothing changed. data.js unchanged."); return; }
